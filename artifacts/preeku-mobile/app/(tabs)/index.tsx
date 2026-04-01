@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   RefreshControl, Platform, Image,
@@ -6,6 +6,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useGetPortfolioSummary, useGetWatchlist, useGetMarketHeatmap, useGetPositions, useGetHoldings } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useTradingContext } from "@/context/TradingContext";
@@ -95,6 +96,13 @@ export default function HomeScreen() {
   const { data: holdings } = useGetHoldings();
   const { prices } = useLivePrices();
 
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [profileName, setProfileName] = useState("Trader");
+  useEffect(() => {
+    AsyncStorage.getItem("preeku_avatar").then((v) => setAvatarUri(v));
+    AsyncStorage.getItem("preeku_name").then((v) => { if (v) setProfileName(v); });
+  }, []);
+
   const s = summary as Summary | undefined;
   const watchlistItems: WatchlistItem[] = Array.isArray(watchlist) ? watchlist : [];
   const heatmapData: HeatmapSector[] = Array.isArray(heatmap) ? heatmap : [];
@@ -158,8 +166,10 @@ export default function HomeScreen() {
       justifyContent: "space-between" as const,
     },
     appName: { fontSize: 22, fontWeight: "700" as const, color: colors.foreground, fontFamily: "Inter_700Bold" },
-    badge: { backgroundColor: colors.primary + "20", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: colors.primary + "40" },
-    badgeText: { color: colors.primary, fontSize: 11, fontWeight: "600" as const, fontFamily: "Inter_600SemiBold" },
+    avatarBtn: { width: 36, height: 36, borderRadius: 18, overflow: "hidden" as const, borderWidth: 2, borderColor: colors.primary + "50" },
+    avatarImg: { width: 36, height: 36 },
+    avatarPlaceholder: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary + "25", alignItems: "center" as const, justifyContent: "center" as const },
+    avatarInitials: { color: colors.primary, fontSize: 13, fontWeight: "700" as const, fontFamily: "Inter_700Bold" },
     portfolioCard: {
       marginHorizontal: 16, marginBottom: 16,
       backgroundColor: colors.card,
@@ -198,9 +208,21 @@ export default function HomeScreen() {
           style={{ width: 36, height: 36, borderRadius: 8 }}
           resizeMode="contain"
         />
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>Paper Trading</Text>
-        </View>
+        <TouchableOpacity
+          onPress={() => router.push("/(tabs)/profile")}
+          activeOpacity={0.75}
+          style={styles.avatarBtn}
+        >
+          {avatarUri ? (
+            <Image source={{ uri: avatarUri }} style={styles.avatarImg} />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Text style={styles.avatarInitials}>
+                {profileName.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase()}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       <ScrollView
