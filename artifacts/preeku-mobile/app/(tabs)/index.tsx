@@ -227,16 +227,6 @@ export default function HomeScreen() {
             </View>
             <Text style={{ color: colors.mutedForeground, fontSize: 11, fontFamily: "Inter_400Regular" }}>Total P&L</Text>
           </View>
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statLabel}>INVESTED</Text>
-              <Text style={[styles.statValue, { color: colors.foreground }]}>{formatINR(liveStats.totalInvested)}</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statLabel}>CURRENT</Text>
-              <Text style={[styles.statValue, { color: colors.foreground }]}>{formatINR(liveStats.currentValue)}</Text>
-            </View>
-          </View>
         </View>
 
         {/* Watchlist */}

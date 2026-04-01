@@ -210,19 +210,7 @@ export default function PortfolioScreen() {
       {/* Summary — live-recalculated from WebSocket prices */}
       <View style={styles.summaryCard}>
         <View style={styles.summaryRow}>
-          <View style={styles.summaryBox}>
-            <Text style={styles.summaryLabel}>INVESTED</Text>
-            <Text style={[styles.summaryValue, { color: colors.foreground }]}>
-              {`₹${(liveStats.totalInvested / 100000).toFixed(2)}L`}
-            </Text>
-          </View>
-          <View style={styles.summaryBox}>
-            <Text style={styles.summaryLabel}>CURRENT</Text>
-            <Text style={[styles.summaryValue, { color: colors.foreground }]}>
-              {`₹${(liveStats.currentValue / 100000).toFixed(2)}L`}
-            </Text>
-          </View>
-          <View style={styles.summaryBox}>
+          <View style={[styles.summaryBox, { flex: 1 }]}>
             <Text style={styles.summaryLabel}>P&L</Text>
             <FlashingPrice
               value={liveStats.totalPnl}
