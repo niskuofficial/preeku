@@ -93,10 +93,21 @@ export class SmartStream extends EventEmitter {
         this.startHeartbeat();
       });
 
-      ws.on("message", (data: Buffer | string) => {
-        if (typeof data === "string") return;
-        if (Buffer.isBuffer(data) && data.length >= 51) {
-          this.parseBinary(data);
+      ws.on("message", (data: Buffer | ArrayBuffer | Buffer[], isBinary: boolean) => {
+        let buf: Buffer;
+        if (Buffer.isBuffer(data)) {
+          buf = data;
+        } else if (data instanceof ArrayBuffer) {
+          buf = Buffer.from(data);
+        } else if (Array.isArray(data)) {
+          buf = Buffer.concat(data as Buffer[]);
+        } else if (typeof data === "string") {
+          return;
+        } else {
+          return;
+        }
+        if (buf.length >= 10) {
+          this.parseBinary(buf);
         }
       });
 
@@ -145,20 +156,23 @@ export class SmartStream extends EventEmitter {
   private parseBinary(buf: Buffer) {
     try {
       const mode = buf.readUInt8(0);
+
       const tokenRaw = buf.subarray(2, 27).toString("utf8").replace(/\0/g, "").trim();
       const symbol = TOKEN_SYMBOL_MAP[tokenRaw];
+
       if (!symbol) return;
 
-      const ltp = Number(buf.readBigInt64BE(43)) / 100;
-      if (ltp <= 0) return;
+      const ltp = Number(buf.readBigInt64LE(43)) / 100;
+
+      if (ltp <= 0 || ltp > 1000000) return;
 
       let open = 0, high = 0, low = 0, close = 0, volume = 0;
       if (mode === 2 && buf.length >= 123) {
-        open = Number(buf.readBigInt64BE(91)) / 100;
-        high = Number(buf.readBigInt64BE(99)) / 100;
-        low = Number(buf.readBigInt64BE(107)) / 100;
-        close = Number(buf.readBigInt64BE(115)) / 100;
-        volume = Number(buf.readBigInt64BE(67));
+        open = Number(buf.readBigInt64LE(91)) / 100;
+        high = Number(buf.readBigInt64LE(99)) / 100;
+        low = Number(buf.readBigInt64LE(107)) / 100;
+        close = Number(buf.readBigInt64LE(115)) / 100;
+        volume = Number(buf.readBigUInt64LE(67));
       }
 
       const prevClose = close > 0 ? close : this.latestPrices.get(symbol)?.close ?? ltp;
@@ -181,7 +195,12 @@ export class SmartStream extends EventEmitter {
 
       this.latestPrices.set(symbol, tick);
       this.emit("tick", tick);
-    } catch {
+
+      if (this.tickCount <= 5) {
+        console.log(`[SmartStream] tick: ${symbol} ltp=${ltp}`);
+      }
+    } catch (e) {
+      if (this.tickCount <= 3) console.error("[SmartStream] parse error:", e);
     }
   }
 }

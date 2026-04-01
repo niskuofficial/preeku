@@ -10,7 +10,7 @@ import { useListStocks, getListStocksQueryKey } from "@workspace/api-client-reac
 import { useColors } from "@/hooks/useColors";
 import { useTradingContext } from "@/context/TradingContext";
 import { FlashingPrice } from "@/components/FlashingPrice";
-import { useLivePrices } from "@/context/LivePricesContext";
+import { useLivePrices, useLivePrice } from "@/context/LivePricesContext";
 
 interface Stock {
   symbol: string; name: string; exchange: string; sector: string;
@@ -22,7 +22,11 @@ function StockRow({ item, onPress, onBuy, onSell, colors }: {
   item: Stock; onPress: () => void; onBuy: () => void; onSell: () => void;
   colors: ReturnType<typeof useColors>;
 }) {
-  const isUp = item.changePercent >= 0;
+  const live = useLivePrice(item.symbol);
+  const price = live?.ltp ?? item.currentPrice;
+  const changePct = live?.changePercent ?? item.changePercent;
+  const isUp = changePct >= 0;
+
   return (
     <TouchableOpacity
       activeOpacity={0.75}
@@ -40,17 +44,17 @@ function StockRow({ item, onPress, onBuy, onSell, colors }: {
         <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 1 }} numberOfLines={1}>{item.sector}</Text>
       </View>
 
-      {/* Flashing price + change (live from WebSocket) */}
+      {/* Live price + change */}
       <View style={{ alignItems: "flex-end", marginRight: 10 }}>
         <FlashingPrice
-          value={item.currentPrice}
+          value={price}
           symbol={item.symbol}
           style={{ fontSize: 15, fontWeight: "600", fontFamily: "Inter_600SemiBold", color: colors.foreground }}
         />
         <View style={{ flexDirection: "row", alignItems: "center", gap: 2, marginTop: 2 }}>
           <Ionicons name={isUp ? "caret-up" : "caret-down"} size={10} color={isUp ? colors.gain : colors.loss} />
           <Text style={{ fontSize: 12, color: isUp ? colors.gain : colors.loss, fontFamily: "Inter_500Medium", fontWeight: "500" }}>
-            {Math.abs(item.changePercent).toFixed(2)}%
+            {Math.abs(changePct).toFixed(2)}%
           </Text>
         </View>
       </View>
@@ -81,7 +85,7 @@ export default function MarketsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { openOrderModal } = useTradingContext();
-  const { connected } = useLivePrices();
+  const { connected, prices } = useLivePrices();
   const [search, setSearch] = useState("");
   const params = search.trim() ? { search: search.trim() } : undefined;
   const { data: stocks, isLoading, refetch } = useListStocks(params, {
@@ -154,6 +158,7 @@ export default function MarketsScreen() {
 
       <FlatList
         data={stockList}
+        extraData={prices}
         keyExtractor={(item) => item.symbol}
         scrollEnabled={stockList.length > 0}
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.primary} />}

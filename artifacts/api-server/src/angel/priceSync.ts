@@ -43,13 +43,14 @@ export function getTokenMap() {
 
 export async function syncPrices(force = false): Promise<{ synced: number; errors: string[] }> {
   const now = Date.now();
-  if (!force && (syncing || now - lastSyncAt < 15000)) {
+  if (!force && (syncing || now - lastSyncAt < 4000)) {
     return { synced: 0, errors: [] };
   }
 
   syncing = true;
   const errors: string[] = [];
   let synced = 0;
+  let broadcastCount = 0;
 
   try {
     const nseTokens = Object.values(SYMBOL_TOKEN_MAP).map((v) => v.token);
