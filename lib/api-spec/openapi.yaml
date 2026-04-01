@@ -1,22 +1,30 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Preeku Paper Trading Platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: wallet
+    description: Virtual wallet operations
+  - name: stocks
+    description: Stock market data
+  - name: watchlist
+    description: Watchlist management
+  - name: orders
+    description: Order management
+  - name: portfolio
+    description: Portfolio and positions
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +32,245 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /wallet:
+    get:
+      operationId: getWallet
+      tags: [wallet]
+      summary: Get current wallet balance and summary
+      responses:
+        "200":
+          description: Wallet info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Wallet"
+
+  /stocks:
+    get:
+      operationId: listStocks
+      tags: [stocks]
+      summary: List all available stocks with current prices
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          required: false
+      responses:
+        "200":
+          description: List of stocks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Stock"
+
+  /stocks/{symbol}:
+    get:
+      operationId: getStock
+      tags: [stocks]
+      summary: Get a specific stock's details and price history
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Stock details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockDetail"
+        "404":
+          description: Stock not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /watchlist:
+    get:
+      operationId: getWatchlist
+      tags: [watchlist]
+      summary: Get user's watchlist
+      responses:
+        "200":
+          description: Watchlist items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WatchlistItem"
+    post:
+      operationId: addToWatchlist
+      tags: [watchlist]
+      summary: Add a stock to watchlist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddWatchlistBody"
+      responses:
+        "201":
+          description: Added to watchlist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WatchlistItem"
+
+  /watchlist/{symbol}:
+    delete:
+      operationId: removeFromWatchlist
+      tags: [watchlist]
+      summary: Remove a stock from watchlist
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Removed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /orders:
+    get:
+      operationId: listOrders
+      tags: [orders]
+      summary: List all orders (history)
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [EXECUTED, CANCELLED, PENDING]
+          required: false
+      responses:
+        "200":
+          description: Order list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+    post:
+      operationId: placeOrder
+      tags: [orders]
+      summary: Place a new order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaceOrderBody"
+      responses:
+        "201":
+          description: Order placed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          description: Insufficient funds or invalid order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orders/{id}/cancel:
+    post:
+      operationId: cancelOrder
+      tags: [orders]
+      summary: Cancel a pending order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Order cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "404":
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /portfolio/positions:
+    get:
+      operationId: getPositions
+      tags: [portfolio]
+      summary: Get open intraday positions
+      responses:
+        "200":
+          description: Open positions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Position"
+
+  /portfolio/holdings:
+    get:
+      operationId: getHoldings
+      tags: [portfolio]
+      summary: Get long-term holdings (delivery)
+      responses:
+        "200":
+          description: Holdings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Holding"
+
+  /portfolio/summary:
+    get:
+      operationId: getPortfolioSummary
+      tags: [portfolio]
+      summary: Get portfolio summary with P&L and stats
+      responses:
+        "200":
+          description: Portfolio summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortfolioSummary"
+
+  /market/heatmap:
+    get:
+      operationId: getMarketHeatmap
+      tags: [stocks]
+      summary: Get market heatmap data (sector-wise performance)
+      responses:
+        "200":
+          description: Heatmap data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HeatmapSector"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +278,304 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    Wallet:
+      type: object
+      properties:
+        id:
+          type: integer
+        balance:
+          type: number
+        initialBalance:
+          type: number
+        totalInvested:
+          type: number
+        totalPnl:
+          type: number
+        totalPnlPercent:
+          type: number
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, balance, initialBalance, totalInvested, totalPnl, totalPnlPercent, updatedAt]
+
+    Stock:
+      type: object
+      properties:
+        symbol:
+          type: string
+        name:
+          type: string
+        exchange:
+          type: string
+        sector:
+          type: string
+        currentPrice:
+          type: number
+        previousClose:
+          type: number
+        change:
+          type: number
+        changePercent:
+          type: number
+        high:
+          type: number
+        low:
+          type: number
+        volume:
+          type: integer
+        marketCap:
+          type: number
+      required: [symbol, name, exchange, sector, currentPrice, previousClose, change, changePercent, high, low, volume, marketCap]
+
+    StockDetail:
+      allOf:
+        - $ref: "#/components/schemas/Stock"
+        - type: object
+          properties:
+            priceHistory:
+              type: array
+              items:
+                $ref: "#/components/schemas/PricePoint"
+          required: [priceHistory]
+
+    PricePoint:
+      type: object
+      properties:
+        time:
+          type: string
+        price:
+          type: number
+        volume:
+          type: integer
+      required: [time, price, volume]
+
+    WatchlistItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        symbol:
+          type: string
+        name:
+          type: string
+        currentPrice:
+          type: number
+        change:
+          type: number
+        changePercent:
+          type: number
+        addedAt:
+          type: string
+          format: date-time
+      required: [id, symbol, name, currentPrice, change, changePercent, addedAt]
+
+    AddWatchlistBody:
+      type: object
+      properties:
+        symbol:
+          type: string
+      required: [symbol]
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+        symbol:
+          type: string
+        stockName:
+          type: string
+        orderType:
+          type: string
+          enum: [MARKET, LIMIT]
+        side:
+          type: string
+          enum: [BUY, SELL]
+        productType:
+          type: string
+          enum: [INTRADAY, DELIVERY]
+        quantity:
+          type: integer
+        price:
+          type: number
+        executedPrice:
+          type: number
+          nullable: true
+        status:
+          type: string
+          enum: [PENDING, EXECUTED, CANCELLED]
+        totalValue:
+          type: number
+        pnl:
+          type: number
+          nullable: true
+        placedAt:
+          type: string
+          format: date-time
+        executedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required: [id, symbol, stockName, orderType, side, productType, quantity, price, status, totalValue, placedAt]
+
+    PlaceOrderBody:
+      type: object
+      properties:
+        symbol:
+          type: string
+        orderType:
+          type: string
+          enum: [MARKET, LIMIT]
+        side:
+          type: string
+          enum: [BUY, SELL]
+        productType:
+          type: string
+          enum: [INTRADAY, DELIVERY]
+        quantity:
+          type: integer
+        limitPrice:
+          type: number
+          nullable: true
+      required: [symbol, orderType, side, productType, quantity]
+
+    Position:
+      type: object
+      properties:
+        id:
+          type: integer
+        symbol:
+          type: string
+        stockName:
+          type: string
+        quantity:
+          type: integer
+        avgBuyPrice:
+          type: number
+        currentPrice:
+          type: number
+        pnl:
+          type: number
+        pnlPercent:
+          type: number
+        currentValue:
+          type: number
+        investedValue:
+          type: number
+        productType:
+          type: string
+          enum: [INTRADAY, DELIVERY]
+      required: [id, symbol, stockName, quantity, avgBuyPrice, currentPrice, pnl, pnlPercent, currentValue, investedValue, productType]
+
+    Holding:
+      type: object
+      properties:
+        id:
+          type: integer
+        symbol:
+          type: string
+        stockName:
+          type: string
+        quantity:
+          type: integer
+        avgBuyPrice:
+          type: number
+        currentPrice:
+          type: number
+        pnl:
+          type: number
+        pnlPercent:
+          type: number
+        currentValue:
+          type: number
+        investedValue:
+          type: number
+        dayChange:
+          type: number
+        dayChangePercent:
+          type: number
+      required: [id, symbol, stockName, quantity, avgBuyPrice, currentPrice, pnl, pnlPercent, currentValue, investedValue, dayChange, dayChangePercent]
+
+    PortfolioSummary:
+      type: object
+      properties:
+        totalInvested:
+          type: number
+        currentValue:
+          type: number
+        totalPnl:
+          type: number
+        totalPnlPercent:
+          type: number
+        dayPnl:
+          type: number
+        dayPnlPercent:
+          type: number
+        walletBalance:
+          type: number
+        openPositions:
+          type: integer
+        totalHoldings:
+          type: integer
+        totalOrders:
+          type: integer
+        bestPerformer:
+          $ref: "#/components/schemas/PerformerStock"
+          nullable: true
+        worstPerformer:
+          $ref: "#/components/schemas/PerformerStock"
+          nullable: true
+      required: [totalInvested, currentValue, totalPnl, totalPnlPercent, dayPnl, dayPnlPercent, walletBalance, openPositions, totalHoldings, totalOrders]
+
+    PerformerStock:
+      type: object
+      properties:
+        symbol:
+          type: string
+        name:
+          type: string
+        pnlPercent:
+          type: number
+      required: [symbol, name, pnlPercent]
+
+    HeatmapSector:
+      type: object
+      properties:
+        sector:
+          type: string
+        changePercent:
+          type: number
+        stocks:
+          type: array
+          items:
+            $ref: "#/components/schemas/HeatmapStock"
+      required: [sector, changePercent, stocks]
+
+    HeatmapStock:
+      type: object
+      properties:
+        symbol:
+          type: string
+        name:
+          type: string
+        changePercent:
+          type: number
+        marketCap:
+          type: number
+      required: [symbol, name, changePercent, marketCap]
+
+    SuccessResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required: [message]
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
