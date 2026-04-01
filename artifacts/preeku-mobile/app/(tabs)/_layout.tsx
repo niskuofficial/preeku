@@ -29,6 +29,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "briefcase", selected: "briefcase.fill" }} />
         <Label>Portfolio</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="profile">
+        <Icon sf={{ default: "person.circle", selected: "person.circle.fill" }} />
+        <Label>Account</Label>
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
@@ -69,7 +73,7 @@ function ClassicTabLayout() {
             />
           ) : null,
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
           fontFamily: "Inter_500Medium",
           marginBottom: isWeb ? 0 : 2,
         },
@@ -81,7 +85,7 @@ function ClassicTabLayout() {
           title: "Home",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="house.fill" tintColor={color} size={24} />
+              <SymbolView name="house.fill" tintColor={color} size={22} />
             ) : (
               <Ionicons name="home" size={22} color={color} />
             ),
@@ -93,7 +97,7 @@ function ClassicTabLayout() {
           title: "Markets",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="building.columns.fill" tintColor={color} size={24} />
+              <SymbolView name="building.columns.fill" tintColor={color} size={22} />
             ) : (
               <Ionicons name="bar-chart" size={22} color={color} />
             ),
@@ -105,7 +109,7 @@ function ClassicTabLayout() {
           title: "Orders",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="list.bullet.rectangle.fill" tintColor={color} size={24} />
+              <SymbolView name="list.bullet.rectangle.fill" tintColor={color} size={22} />
             ) : (
               <Ionicons name="receipt" size={22} color={color} />
             ),
@@ -117,9 +121,21 @@ function ClassicTabLayout() {
           title: "Portfolio",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="briefcase.fill" tintColor={color} size={24} />
+              <SymbolView name="briefcase.fill" tintColor={color} size={22} />
             ) : (
               <Ionicons name="briefcase" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Account",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="person.circle.fill" tintColor={color} size={22} />
+            ) : (
+              <Ionicons name="person-circle" size={22} color={color} />
             ),
         }}
       />

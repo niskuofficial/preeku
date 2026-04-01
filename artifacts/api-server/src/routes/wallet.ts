@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, walletTable, positionsTable, stocksTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -18,8 +18,7 @@ router.get("/wallet", async (req, res) => {
 
     if (symbols.length > 0) {
       const stocks = await db.select().from(stocksTable).where(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (stocksTable.symbol as any).in(symbols)
+        inArray(stocksTable.symbol, symbols)
       );
       const priceMap = new Map(stocks.map((s) => [s.symbol, parseFloat(s.currentPrice)]));
 
