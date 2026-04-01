@@ -194,6 +194,62 @@ function HeatBlock({
   );
 }
 
+function MoverRow({
+  symbol, name, sector, fallbackChgPct, rank, isGainer, colors,
+}: {
+  symbol: string; name: string; sector: string; fallbackChgPct: number;
+  rank: number; isGainer: boolean;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const router = useRouter();
+  const live = useLivePrice(symbol);
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  const apiBase = domain ? `https://${domain}` : "http://localhost:8080";
+
+  const { data: stockData } = useQuery<{ currentPrice: number; changePercent: number }>({
+    queryKey: ["stock-detail", symbol],
+    queryFn: () => fetch(`${apiBase}/api/stocks/${symbol}`).then((r) => r.json()),
+    enabled: !live || live.ltp === 0,
+    staleTime: 30000,
+    refetchInterval: 60000,
+  });
+
+  const price = live?.ltp && live.ltp > 0 ? live.ltp : (stockData?.currentPrice ?? 0);
+  const chgPct = live?.changePercent ?? stockData?.changePercent ?? fallbackChgPct;
+
+  const clr = isGainer ? "#4ade80" : "#f87171";
+  const bgClr = isGainer ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)";
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={() => router.push(`/stock/${symbol}`)}
+      style={{
+        flexDirection: "row", alignItems: "center",
+        paddingHorizontal: 16, paddingVertical: 13,
+        borderBottomWidth: 1, borderColor: colors.border,
+      }}
+    >
+      <Text style={{ fontSize: 12, fontWeight: "600", color: colors.mutedForeground, fontFamily: "Inter_600SemiBold", width: 26 }}>#{rank}</Text>
+      <View style={{ flex: 1, marginLeft: 4 }}>
+        <Text style={{ fontSize: 14, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" }}>{symbol}</Text>
+        <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 1 }} numberOfLines={1}>{sector}</Text>
+      </View>
+      <View style={{ alignItems: "flex-end" }}>
+        <Text style={{ fontSize: 14, fontWeight: "600", color: colors.foreground, fontFamily: "Inter_600SemiBold", fontVariant: ["tabular-nums"] }}>
+          {price > 0 ? `₹${price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+        </Text>
+        <View style={{ marginTop: 3, backgroundColor: bgClr, borderRadius: 5, paddingHorizontal: 7, paddingVertical: 2 }}>
+          <Text style={{ fontSize: 11, fontWeight: "700", color: clr, fontFamily: "Inter_700Bold" }}>
+            {chgPct >= 0 ? "+" : ""}{chgPct.toFixed(2)}%
+          </Text>
+        </View>
+      </View>
+      <Ionicons name="chevron-forward" size={14} color={colors.mutedForeground} style={{ marginLeft: 8 }} />
+    </TouchableOpacity>
+  );
+}
+
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -476,28 +532,18 @@ export default function HomeScreen() {
                   <Text style={{ fontSize: 13, fontWeight: "700", fontFamily: "Inter_700Bold", color: moversTab === "losers" ? "#f87171" : colors.mutedForeground }}>Top Losers</Text>
                 </TouchableOpacity>
               </View>
-              {(moversTab === "gainers" ? topGainers : topLosers).map((stock, idx) => {
-                const isGainer = moversTab === "gainers";
-                const color = isGainer ? "#4ade80" : "#f87171";
-                const bgColor = isGainer ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)";
-                return (
-                  <View key={stock.symbol} style={[styles.moverRow, idx === (moversTab === "gainers" ? topGainers : topLosers).length - 1 && { borderBottomWidth: 0 }]}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
-                      <Text style={styles.moverRank}>#{idx + 1}</Text>
-                      <View>
-                        <Text style={styles.moverSymbol}>{stock.symbol}</Text>
-                        <Text style={styles.moverSector}>{stock.sector}</Text>
-                      </View>
-                    </View>
-                    <View style={{ alignItems: "flex-end" }}>
-                      <Text style={styles.moverPrice}>{stock.ltp > 0 ? `₹${stock.ltp.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}</Text>
-                      <View style={[styles.moverChgChip, { backgroundColor: bgColor }]}>
-                        <Text style={[styles.moverChgText, { color }]}>{stock.chgPct >= 0 ? "+" : ""}{stock.chgPct.toFixed(2)}%</Text>
-                      </View>
-                    </View>
-                  </View>
-                );
-              })}
+              {(moversTab === "gainers" ? topGainers : topLosers).map((stock, idx) => (
+                <MoverRow
+                  key={stock.symbol}
+                  symbol={stock.symbol}
+                  name={stock.name}
+                  sector={stock.sector}
+                  fallbackChgPct={stock.chgPct}
+                  rank={idx + 1}
+                  isGainer={moversTab === "gainers"}
+                  colors={colors}
+                />
+              ))}
             </View>
           </View>
         )}
