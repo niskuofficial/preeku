@@ -1,11 +1,17 @@
 import React, { useState, useMemo } from "react";
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity,
-  Platform, ActivityIndicator, RefreshControl,
+  Platform, ActivityIndicator, RefreshControl, Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useGetPositions, useGetHoldings, useGetPortfolioSummary } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useGetPositions, useGetHoldings, useGetPortfolioSummary,
+  usePlaceOrder,
+  getGetPositionsQueryKey, getGetHoldingsQueryKey,
+  getGetPortfolioSummaryQueryKey, getGetWalletQueryKey, getListOrdersQueryKey,
+} from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useTradingContext } from "@/context/TradingContext";
 import { useLivePrice, useLivePrices } from "@/context/LivePricesContext";
@@ -35,13 +41,57 @@ function formatPct(n: number) {
   return (n >= 0 ? "+" : "") + n.toFixed(2) + "%";
 }
 
-function PositionCard({ item, colors, onExit }: { item: Position; colors: ReturnType<typeof useColors>; onExit: () => void }) {
+function PositionCard({ item, colors }: { item: Position; colors: ReturnType<typeof useColors> }) {
   const live = useLivePrice(item.symbol);
   const ltp = live?.ltp ?? item.currentPrice;
   const currentValue = ltp * item.quantity;
   const pnl = currentValue - item.investedValue;
   const pnlPercent = item.investedValue > 0 ? (pnl / item.investedValue) * 100 : 0;
   const isUp = pnl >= 0;
+
+  const queryClient = useQueryClient();
+  const placeOrder = usePlaceOrder();
+
+  const handleExit = () => {
+    const pnlSign = pnl >= 0 ? "+" : "";
+    Alert.alert(
+      "Exit Position",
+      `Sell all ${item.quantity} shares of ${item.symbol} at market price?\n\nP&L: ${pnlSign}${formatINR(pnl)} (${formatPct(pnlPercent)})`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Exit Now",
+          style: "destructive",
+          onPress: () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            placeOrder.mutate({
+              data: {
+                symbol: item.symbol,
+                orderType: "MARKET",
+                side: "SELL",
+                productType: "INTRADAY",
+                quantity: item.quantity,
+              },
+            }, {
+              onSuccess: () => {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                queryClient.invalidateQueries({ queryKey: getGetPositionsQueryKey() });
+                queryClient.invalidateQueries({ queryKey: getGetPortfolioSummaryQueryKey() });
+                queryClient.invalidateQueries({ queryKey: getGetWalletQueryKey() });
+                queryClient.invalidateQueries({ queryKey: getListOrdersQueryKey() });
+              },
+              onError: (err: unknown) => {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                const msg = err instanceof Error ? err.message : "Exit failed. Try again.";
+                Alert.alert("Error", msg);
+              },
+            });
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <View style={{ backgroundColor: colors.card, borderRadius: 14, marginHorizontal: 16, marginBottom: 10, borderWidth: 1, borderColor: colors.border, padding: 16 }}>
       <View style={{ flexDirection: "row" as const, justifyContent: "space-between" as const, alignItems: "flex-start" as const, marginBottom: 12 }}>
@@ -76,8 +126,16 @@ function PositionCard({ item, colors, onExit }: { item: Position; colors: Return
           </View>
         ))}
       </View>
-      <TouchableOpacity style={{ backgroundColor: colors.lossBg, borderRadius: 8, paddingVertical: 9, alignItems: "center" as const, borderWidth: 1, borderColor: colors.loss + "30" }} onPress={onExit} activeOpacity={0.7}>
-        <Text style={{ color: colors.loss, fontSize: 13, fontWeight: "700" as const, fontFamily: "Inter_700Bold" }}>Exit Position</Text>
+      <TouchableOpacity
+        style={{ backgroundColor: placeOrder.isPending ? colors.secondary : colors.lossBg, borderRadius: 8, paddingVertical: 9, alignItems: "center" as const, borderWidth: 1, borderColor: colors.loss + "30" }}
+        onPress={handleExit}
+        disabled={placeOrder.isPending}
+        activeOpacity={0.7}
+      >
+        {placeOrder.isPending
+          ? <ActivityIndicator size="small" color={colors.loss} />
+          : <Text style={{ color: colors.loss, fontSize: 13, fontWeight: "700" as const, fontFamily: "Inter_700Bold" }}>Exit Position</Text>
+        }
       </TouchableOpacity>
     </View>
   );
@@ -253,7 +311,6 @@ export default function PortfolioScreen() {
             <PositionCard
               item={item}
               colors={colors}
-              onExit={() => openOrderModal({ symbol: item.symbol, name: item.stockName, currentPrice: item.currentPrice }, "SELL")}
             />
           )}
           ListEmptyComponent={
