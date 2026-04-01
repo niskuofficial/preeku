@@ -10,6 +10,7 @@ import Svg, { Path, Defs, LinearGradient, Stop, Line, Circle } from "react-nativ
 import { useGetStock } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useTradingContext } from "@/context/TradingContext";
+import { FlashingPrice, FlashingChange } from "@/components/FlashingPrice";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CHART_WIDTH = SCREEN_WIDTH - 32;
@@ -144,7 +145,7 @@ export default function StockDetailScreen() {
   const { openOrderModal } = useTradingContext();
 
   const { data: stock, isLoading, refetch } = useGetStock(symbol ?? "", {
-    query: { refetchInterval: 30000, enabled: !!symbol },
+    query: { refetchInterval: 15000, enabled: !!symbol },
   });
 
   const s = stock as {
@@ -215,15 +216,18 @@ export default function StockDetailScreen() {
           >
             {/* Price block */}
             <View style={{ paddingTop: 20, paddingBottom: 16 }}>
-              <Text style={{ fontSize: 38, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold", letterSpacing: -0.5 }}>
-                ₹{s.currentPrice.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </Text>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: priceColor + "18", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+              <FlashingPrice
+                value={s.currentPrice}
+                style={{ fontSize: 38, fontWeight: "700", fontFamily: "Inter_700Bold", letterSpacing: -0.5, color: colors.foreground }}
+              />
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: priceColor + "18", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }}>
                   <Ionicons name={isUp ? "trending-up" : "trending-down"} size={14} color={priceColor} />
-                  <Text style={{ color: priceColor, fontSize: 14, fontWeight: "700", fontFamily: "Inter_700Bold" }}>
-                    {isUp ? "+" : ""}{s.change.toFixed(2)} ({isUp ? "+" : ""}{s.changePercent.toFixed(2)}%)
-                  </Text>
+                  <FlashingChange
+                    change={s.change}
+                    changePercent={s.changePercent}
+                    style={{ fontSize: 14, fontWeight: "700", fontFamily: "Inter_700Bold" }}
+                  />
                 </View>
                 <View style={{ backgroundColor: colors.card, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: colors.border }}>
                   <Text style={{ color: colors.mutedForeground, fontSize: 11, fontFamily: "Inter_500Medium", fontWeight: "500" }}>

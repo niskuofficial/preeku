@@ -9,6 +9,7 @@ import { useRouter } from "expo-router";
 import { useGetPortfolioSummary, useGetWatchlist, useGetMarketHeatmap } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useTradingContext } from "@/context/TradingContext";
+import { FlashingPrice } from "@/components/FlashingPrice";
 
 function formatINR(n: number) {
   if (Math.abs(n) >= 1e7) return "₹" + (n / 1e7).toFixed(2) + "Cr";
@@ -50,9 +51,9 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { openOrderModal } = useTradingContext();
-  const { data: summary, refetch: refetchSummary, isLoading } = useGetPortfolioSummary();
-  const { data: watchlist, refetch: refetchWatchlist } = useGetWatchlist();
-  const { data: heatmap } = useGetMarketHeatmap();
+  const { data: summary, refetch: refetchSummary, isLoading } = useGetPortfolioSummary({ query: { refetchInterval: 30000 } });
+  const { data: watchlist, refetch: refetchWatchlist } = useGetWatchlist({ query: { refetchInterval: 15000 } });
+  const { data: heatmap } = useGetMarketHeatmap({ query: { refetchInterval: 60000 } });
 
   const s = summary as Summary | undefined;
   const watchlistItems: WatchlistItem[] = Array.isArray(watchlist) ? watchlist : [];
@@ -180,8 +181,11 @@ export default function HomeScreen() {
                         <Text style={styles.watchlistName} numberOfLines={1}>{item.name}</Text>
                       </View>
                     </View>
-                    <View>
-                      <Text style={styles.watchlistPrice}>₹{item.currentPrice.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+                    <View style={{ alignItems: "flex-end" }}>
+                      <FlashingPrice
+                        value={item.currentPrice}
+                        style={styles.watchlistPrice}
+                      />
                       <Text style={[styles.watchlistChg, { color: item.changePercent >= 0 ? colors.gain : colors.loss }]}>
                         {formatPct(item.changePercent)}
                       </Text>
