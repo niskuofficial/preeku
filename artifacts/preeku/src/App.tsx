@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { TradingProvider } from "@/context/TradingContext";
+import { LivePricesProvider } from "@/context/LivePricesContext";
 import Sidebar from "@/components/Sidebar";
 import OrderWindow from "@/components/OrderWindow";
 import Dashboard from "@/pages/Dashboard";
@@ -44,11 +45,13 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <TradingProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <AppLayout />
-          </WouterRouter>
-        </TradingProvider>
+        <LivePricesProvider>
+          <TradingProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <AppLayout />
+            </WouterRouter>
+          </TradingProvider>
+        </LivePricesProvider>
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>

@@ -1,8 +1,12 @@
 import { useGetPortfolioSummary, useGetMarketHeatmap, useListOrders, useGetWatchlist } from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
 import { formatINR, formatPercent, pnlClass } from "@/lib/format";
 import { useTradingContext } from "@/context/TradingContext";
-import { TrendingUp, TrendingDown, Wallet, BarChart3, ArrowUpRight, ArrowDownRight, Clock } from "lucide-react";
+import { useLivePrices, useLivePrice } from "@/context/LivePricesContext";
+import { LivePriceRow } from "@/components/FlashingPrice";
+import { TrendingUp, TrendingDown, Wallet, BarChart3, ArrowUpRight, ArrowDownRight, Clock, Activity } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { useEffect, useRef, useState } from "react";
 
 interface StockInfo { symbol: string; name: string; pnlPercent: number; }
 interface SummaryType {
@@ -12,7 +16,50 @@ interface SummaryType {
   bestPerformer: StockInfo | null; worstPerformer: StockInfo | null;
 }
 
-function StatCard({ label, value, sub, positive, icon: Icon }: {
+interface IndexData { name: string; value: number; change: number; changePercent: number; }
+
+function IndexCard({ idx }: { idx: IndexData }) {
+  const up = idx.changePercent >= 0;
+  const loading = idx.value === 0;
+  const prevRef = useRef<number | undefined>(undefined);
+  const [flashClass, setFlashClass] = useState("");
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (prevRef.current === undefined) { prevRef.current = idx.value; return; }
+    if (idx.value !== prevRef.current) {
+      const isUp = idx.value > prevRef.current;
+      prevRef.current = idx.value;
+      if (timerRef.current) clearTimeout(timerRef.current);
+      setFlashClass(isUp ? "flash-green" : "flash-red");
+      timerRef.current = setTimeout(() => setFlashClass(""), 700);
+    }
+  }, [idx.value]);
+
+  return (
+    <div className={`flex-1 bg-card border rounded-xl p-4 ${loading ? "border-border" : up ? "border-green-500/20" : "border-red-500/20"}`}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{idx.name}</span>
+        {loading ? (
+          <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">Loading</span>
+        ) : (
+          <span className={`flex items-center gap-1 text-xs font-mono font-semibold px-2 py-0.5 rounded-full ${up ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
+            {up ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+            {up ? "+" : ""}{idx.changePercent.toFixed(2)}%
+          </span>
+        )}
+      </div>
+      <div className={`text-2xl font-bold font-mono ${flashClass} ${loading ? "text-muted-foreground" : "text-foreground"}`}>
+        {loading ? "—" : idx.value.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+      </div>
+      <div className={`text-xs mt-1 font-mono ${loading ? "text-muted-foreground" : up ? "text-green-400" : "text-red-400"}`}>
+        {loading ? "Connecting..." : `${up ? "+" : ""}${idx.change.toFixed(2)} pts`}
+      </div>
+    </div>
+  );
+}
+
+function FlashingStat({ label, value, sub, positive, icon: Icon }: {
   label: string; value: string; sub?: string; positive?: boolean;
   icon?: React.ComponentType<{ className?: string }>;
 }) {
@@ -39,6 +86,7 @@ function HeatmapBlock({ sector, stocks }: {
 }) {
   const sectorChange = stocks.length > 0 ? stocks.reduce((acc, s) => acc + s.changePercent, 0) / stocks.length : 0;
   const { openOrderWindow } = useTradingContext();
+  const { prices } = useLivePrices();
 
   const getColor = (pct: number) => {
     if (pct > 2) return "bg-green-500";
@@ -58,17 +106,21 @@ function HeatmapBlock({ sector, stocks }: {
         </span>
       </div>
       <div className="grid grid-cols-2 gap-1">
-        {stocks.slice(0, 4).map((s) => (
-          <button
-            key={s.symbol}
-            onClick={() => openOrderWindow({ symbol: s.symbol, name: s.name, currentPrice: 0 })}
-            data-testid={`heatmap-stock-${s.symbol}`}
-            className={`${getColor(s.changePercent)} rounded p-1.5 text-left transition-opacity hover:opacity-80`}
-          >
-            <div className="text-white text-xs font-bold">{s.symbol}</div>
-            <div className="text-white/80 text-xs font-mono">{formatPercent(s.changePercent)}</div>
-          </button>
-        ))}
+        {stocks.slice(0, 4).map((s) => {
+          const live = prices[s.symbol];
+          const pct = live?.changePercent ?? s.changePercent;
+          return (
+            <button
+              key={s.symbol}
+              onClick={() => openOrderWindow({ symbol: s.symbol, name: s.name, currentPrice: live?.ltp ?? 0 })}
+              data-testid={`heatmap-stock-${s.symbol}`}
+              className={`${getColor(pct)} rounded p-1.5 text-left transition-opacity hover:opacity-80`}
+            >
+              <div className="text-white text-xs font-bold">{s.symbol}</div>
+              <div className="text-white/80 text-xs font-mono">{formatPercent(pct)}</div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -80,13 +132,25 @@ export default function Dashboard() {
   const { data: orders } = useListOrders();
   const { data: watchlist } = useGetWatchlist();
   const { openOrderWindow } = useTradingContext();
+  const { connected } = useLivePrices();
+
+  const { data: indicesData } = useQuery<IndexData[]>({
+    queryKey: ["market-indices"],
+    queryFn: () => fetch("/api/market/indices").then((r) => r.json()),
+    refetchInterval: 30000,
+    staleTime: 15000,
+  });
 
   const s = summary as SummaryType | undefined;
   const recentOrders = Array.isArray(orders) ? orders.slice(0, 5) : [];
   const heatmapData = Array.isArray(heatmap) ? heatmap : [];
   const watchlistItems = Array.isArray(watchlist) ? watchlist : [];
 
-  // Build simulated portfolio chart data
+  const indices: IndexData[] = indicesData && indicesData.length > 0 ? indicesData : [
+    { name: "NIFTY 50", value: 0, change: 0, changePercent: 0 },
+    { name: "SENSEX", value: 0, change: 0, changePercent: 0 },
+  ];
+
   const baseValue = s ? (s.totalInvested || 1000000) : 1000000;
   const chartData = Array.from({ length: 30 }, (_, i) => ({
     day: `D${i + 1}`,
@@ -101,18 +165,29 @@ export default function Dashboard() {
           <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
           <p className="text-muted-foreground text-sm mt-0.5">Your paper trading overview</p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground bg-secondary rounded-lg px-3 py-1.5">
-          <Clock className="w-3.5 h-3.5" />
-          <span>Market: 9:15 AM - 3:30 PM IST</span>
+        <div className="flex items-center gap-3">
+          <div className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border ${connected ? "border-green-500/30 bg-green-500/10 text-green-400" : "border-yellow-500/30 bg-yellow-500/10 text-yellow-400"}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-green-400 animate-pulse" : "bg-yellow-400"}`} />
+            {connected ? "Live" : "Connecting"}
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground bg-secondary rounded-lg px-3 py-1.5">
+            <Clock className="w-3.5 h-3.5" />
+            <span>9:15 AM – 3:30 PM IST</span>
+          </div>
         </div>
+      </div>
+
+      {/* Index Cards */}
+      <div className="flex gap-4">
+        {indices.map((idx) => <IndexCard key={idx.name} idx={idx} />)}
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard label="Wallet Balance" value={s ? formatINR(s.walletBalance) : "₹10,00,000"} sub="Available cash" icon={Wallet} />
-        <StatCard label="Portfolio Value" value={s ? formatINR(s.currentValue) : "₹0"} sub={s ? formatPercent(s.totalPnlPercent) : undefined} positive={s ? s.totalPnl >= 0 : undefined} icon={BarChart3} />
-        <StatCard label="Total P&L" value={s ? formatINR(s.totalPnl) : "₹0"} sub={s ? formatPercent(s.totalPnlPercent) : undefined} positive={s ? s.totalPnl >= 0 : undefined} icon={s && s.totalPnl >= 0 ? TrendingUp : TrendingDown} />
-        <StatCard label="Day P&L" value={s ? formatINR(s.dayPnl) : "₹0"} sub={s ? formatPercent(s.dayPnlPercent) : undefined} positive={s ? s.dayPnl >= 0 : undefined} />
+        <FlashingStat label="Wallet Balance" value={s ? formatINR(s.walletBalance) : "₹10,00,000"} sub="Available cash" icon={Wallet} />
+        <FlashingStat label="Portfolio Value" value={s ? formatINR(s.currentValue) : "₹0"} sub={s ? formatPercent(s.totalPnlPercent) : undefined} positive={s ? s.totalPnl >= 0 : undefined} icon={BarChart3} />
+        <FlashingStat label="Total P&L" value={s ? formatINR(s.totalPnl) : "₹0"} sub={s ? formatPercent(s.totalPnlPercent) : undefined} positive={s ? s.totalPnl >= 0 : undefined} icon={s && s.totalPnl >= 0 ? TrendingUp : TrendingDown} />
+        <FlashingStat label="Day P&L" value={s ? formatINR(s.dayPnl) : "₹0"} sub={s ? formatPercent(s.dayPnlPercent) : undefined} positive={s ? s.dayPnl >= 0 : undefined} icon={Activity} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -142,7 +217,7 @@ export default function Dashboard() {
           </ResponsiveContainer>
         </div>
 
-        {/* Watchlist Quick */}
+        {/* Live Watchlist */}
         <div className="bg-card border border-border rounded-xl p-5">
           <h2 className="font-semibold text-foreground mb-4">Watchlist</h2>
           {watchlistItems.length === 0 ? (
@@ -150,21 +225,15 @@ export default function Dashboard() {
           ) : (
             <div className="space-y-1">
               {watchlistItems.slice(0, 6).map((w: { id: number; symbol: string; name: string; currentPrice: number; change: number; changePercent: number }) => (
-                <button
+                <LivePriceRow
                   key={w.symbol}
-                  className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-accent cursor-pointer transition-colors text-left"
+                  symbol={w.symbol}
+                  name={w.name}
+                  ltp={w.currentPrice}
+                  change={w.change}
+                  changePercent={w.changePercent}
                   onClick={() => openOrderWindow({ symbol: w.symbol, name: w.name, currentPrice: w.currentPrice })}
-                  data-testid={`watchlist-item-${w.symbol}`}
-                >
-                  <div>
-                    <div className="font-semibold text-sm text-foreground">{w.symbol}</div>
-                    <div className="text-muted-foreground text-xs">{w.name.split(" ").slice(0, 2).join(" ")}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-mono text-sm text-foreground">{formatINR(w.currentPrice)}</div>
-                    <div className={`text-xs font-mono ${pnlClass(w.changePercent)}`}>{formatPercent(w.changePercent)}</div>
-                  </div>
-                </button>
+                />
               ))}
             </div>
           )}
