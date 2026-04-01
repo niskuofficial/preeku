@@ -374,7 +374,7 @@ export default function HomeScreen() {
             <Image source={{ uri: avatarUri }} style={{ width: 36, height: 36 }} />
           ) : (
             <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary + "25", alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ color: colors.primary, fontSize: 13, fontWeight: "700", fontFamily: "Inter_700Bold" }}>
+              <Text style={{ color: colors.primary, fontSize: 14, fontWeight: "700", fontFamily: "Inter_700Bold", lineHeight: 14, textAlignVertical: "center", includeFontPadding: false }}>
                 {profileName.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase()}
               </Text>
             </View>
