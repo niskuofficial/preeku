@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "F4vapngksiOP1LMvlBy69"
+uri = "file://artifacts/preeku-mobile/assets/images/icon.png"
+type = "image"
+title = "generated_image"
