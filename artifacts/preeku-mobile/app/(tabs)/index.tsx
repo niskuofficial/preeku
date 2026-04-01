@@ -146,13 +146,51 @@ function RecentRow({ symbol, name, exchange, colors, onPress, onBuy, onSell }: {
   );
 }
 
-function HeatBlock({ symbol, changePercent, colors }: { symbol: string; changePercent: number; colors: ReturnType<typeof useColors> }) {
-  const bg = changePercent >= 2 ? "#166534" : changePercent >= 0 ? "#14532d" : changePercent >= -2 ? "#7f1d1d" : "#991b1b";
+function HeatBlock({
+  symbol, changePercent, ltp, onPress,
+}: {
+  symbol: string; changePercent: number; ltp: number;
+  onPress: () => void;
+}) {
+  const getBg = (pct: number) => {
+    if (pct >= 3)  return { bg: "rgba(22,163,74,0.90)",  border: "rgba(74,222,128,0.45)", text: "#fff",    badge: "rgba(255,255,255,0.22)" };
+    if (pct >= 1)  return { bg: "rgba(21,128,61,0.80)",  border: "rgba(74,222,128,0.30)", text: "#bbf7d0", badge: "rgba(255,255,255,0.16)" };
+    if (pct > 0)   return { bg: "rgba(20,83,45,0.75)",   border: "rgba(74,222,128,0.20)", text: "#86efac", badge: "rgba(255,255,255,0.13)" };
+    if (pct > -1)  return { bg: "rgba(127,29,29,0.75)",  border: "rgba(248,113,113,0.20)", text: "#fca5a5", badge: "rgba(255,255,255,0.13)" };
+    if (pct > -3)  return { bg: "rgba(153,27,27,0.82)",  border: "rgba(248,113,113,0.30)", text: "#fecaca", badge: "rgba(255,255,255,0.16)" };
+    return              { bg: "rgba(220,38,38,0.90)",  border: "rgba(248,113,113,0.45)", text: "#fff",    badge: "rgba(255,255,255,0.22)" };
+  };
+  const c = getBg(changePercent);
   return (
-    <View style={{ backgroundColor: bg, borderRadius: 6, padding: 8, minWidth: 72, alignItems: "center" }}>
-      <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700", fontFamily: "Inter_700Bold" }}>{symbol}</Text>
-      <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 10, fontFamily: "Inter_400Regular", marginTop: 2 }}>{formatPct(changePercent)}</Text>
-    </View>
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.75}
+      style={{
+        flex: 1,
+        minWidth: 72,
+        backgroundColor: c.bg,
+        borderWidth: 1,
+        borderColor: c.border,
+        borderRadius: 10,
+        padding: 10,
+        alignItems: "flex-start",
+        minHeight: 72,
+      }}
+    >
+      <Text style={{ color: c.text, fontSize: 12, fontWeight: "700", fontFamily: "Inter_700Bold" }} numberOfLines={1}>
+        {symbol}
+      </Text>
+      {ltp > 0 && (
+        <Text style={{ color: c.text, fontSize: 11, fontFamily: "Inter_400Regular", opacity: 0.75, marginTop: 2 }} numberOfLines={1}>
+          ₹{ltp.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+        </Text>
+      )}
+      <View style={{ marginTop: 4, backgroundColor: c.badge, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2, alignSelf: "flex-start" }}>
+        <Text style={{ color: c.text, fontSize: 10, fontWeight: "700", fontFamily: "Inter_700Bold" }}>
+          {changePercent >= 0 ? "+" : ""}{changePercent.toFixed(2)}%
+        </Text>
+      </View>
+    </TouchableOpacity>
   );
 }
 
@@ -466,20 +504,71 @@ export default function HomeScreen() {
 
         {/* Heatmap */}
         {heatmapData.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
+          <View style={[styles.section, { paddingHorizontal: 16, paddingBottom: 16 }]}>
+            {/* Header */}
+            <View style={[styles.sectionHeader, { marginBottom: 2 }]}>
               <Text style={styles.sectionTitle}>Market Heatmap</Text>
             </View>
-            {heatmapData.slice(0, 4).map((sector) => (
-              <View key={sector.sector} style={styles.heatSector}>
-                <Text style={styles.heatSectorLabel}>{sector.sector} · {formatPct(sector.changePercent)}</Text>
-                <View style={styles.heatRow}>
-                  {sector.stocks.slice(0, 4).map((stock) => (
-                    <HeatBlock key={stock.symbol} symbol={stock.symbol} changePercent={stock.changePercent} colors={colors} />
-                  ))}
+            <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginBottom: 14 }}>
+              Sector-wise performance · tap to trade
+            </Text>
+
+            {heatmapData.slice(0, 5).map((sector) => {
+              const enrichedStocks = sector.stocks
+                .map((s) => ({
+                  ...s,
+                  pct: prices[s.symbol]?.changePercent ?? s.changePercent,
+                  ltp: prices[s.symbol]?.ltp ?? 0,
+                }))
+                .filter((s) => s.pct !== 0)
+                .sort((a, b) => b.marketCap - a.marketCap)
+                .slice(0, 4);
+
+              if (enrichedStocks.length === 0) return null;
+              const sectorAvg = enrichedStocks.reduce((acc, s) => acc + s.pct, 0) / enrichedStocks.length;
+              const isUp = sectorAvg >= 0;
+
+              return (
+                <View key={sector.sector} style={{ marginBottom: 16 }}>
+                  {/* Sector header */}
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: isUp ? "#4ade80" : "#f87171" }} />
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground, fontFamily: "Inter_600SemiBold", flex: 1 }}>
+                      {sector.sector}
+                    </Text>
+                    <View style={{
+                      flexDirection: "row", alignItems: "center", gap: 3,
+                      backgroundColor: isUp ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
+                      borderWidth: 1,
+                      borderColor: isUp ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)",
+                      borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3,
+                    }}>
+                      <Ionicons
+                        name={isUp ? "trending-up" : "trending-down"}
+                        size={11}
+                        color={isUp ? "#4ade80" : "#f87171"}
+                      />
+                      <Text style={{ fontSize: 11, fontWeight: "700", fontFamily: "Inter_700Bold", color: isUp ? "#4ade80" : "#f87171" }}>
+                        {isUp ? "+" : ""}{sectorAvg.toFixed(2)}%
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Stock tiles */}
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                    {enrichedStocks.map((stock) => (
+                      <HeatBlock
+                        key={stock.symbol}
+                        symbol={stock.symbol}
+                        changePercent={stock.pct}
+                        ltp={stock.ltp}
+                        onPress={() => openOrderModal({ symbol: stock.symbol, name: stock.name, currentPrice: stock.ltp })}
+                      />
+                    ))}
+                  </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         )}
       </ScrollView>
