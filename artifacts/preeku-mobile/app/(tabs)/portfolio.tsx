@@ -151,17 +151,25 @@ export default function PortfolioScreen() {
     const totalInvested = s?.totalInvested ?? 0;
     let liveCurrentValue = 0;
     let liveDayPnl = 0;
+    let hasLive = false;
     for (const pos of positionList) {
       const ltp = prices[pos.symbol]?.ltp ?? 0;
-      liveCurrentValue += ltp > 0 ? ltp * pos.quantity : pos.investedValue;
+      if (ltp > 0) {
+        liveCurrentValue += ltp * pos.quantity;
+        liveDayPnl += (ltp - pos.avgBuyPrice) * pos.quantity;
+        hasLive = true;
+      } else {
+        liveCurrentValue += pos.investedValue;
+      }
     }
     for (const h of holdingList) {
       const tick = prices[h.symbol];
       const ltp = tick?.ltp ?? 0;
       if (ltp > 0) {
         liveCurrentValue += ltp * h.quantity;
-        const prevClose = tick?.close ?? ltp;
+        const prevClose = tick.close > 0 ? tick.close : h.avgBuyPrice;
         liveDayPnl += (ltp - prevClose) * h.quantity;
+        hasLive = true;
       } else {
         liveCurrentValue += h.investedValue;
       }
@@ -169,7 +177,7 @@ export default function PortfolioScreen() {
     const hasData = positionList.length > 0 || holdingList.length > 0;
     const currentValue = hasData ? liveCurrentValue : (s?.currentValue ?? 0);
     const totalPnl = hasData ? currentValue - totalInvested : (s?.totalPnl ?? 0);
-    const dayPnl = hasData ? liveDayPnl : (s?.dayPnl ?? 0);
+    const dayPnl = hasData && hasLive ? liveDayPnl : (s?.dayPnl ?? 0);
     return { totalInvested, currentValue, totalPnl, dayPnl };
   }, [prices, positionList, holdingList, s]);
 

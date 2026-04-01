@@ -107,29 +107,36 @@ export default function HomeScreen() {
 
     let liveCurrentValue = 0;
     let liveDayPnl = 0;
+    let hasLivePrices = false;
 
     for (const pos of positionList) {
       const ltp = prices[pos.symbol]?.ltp ?? 0;
-      if (ltp > 0) liveCurrentValue += ltp * pos.quantity;
-      else liveCurrentValue += pos.investedValue;
+      if (ltp > 0) {
+        liveCurrentValue += ltp * pos.quantity;
+        liveDayPnl += (ltp - pos.avgBuyPrice) * pos.quantity;
+        hasLivePrices = true;
+      } else {
+        liveCurrentValue += pos.investedValue;
+      }
     }
     for (const h of holdingList) {
       const tick = prices[h.symbol];
       const ltp = tick?.ltp ?? 0;
       if (ltp > 0) {
         liveCurrentValue += ltp * h.quantity;
-        const prevClose = tick?.close ?? (ltp / (1 + (tick?.changePercent ?? 0) / 100));
+        const prevClose = tick.close > 0 ? tick.close : h.avgBuyPrice;
         liveDayPnl += (ltp - prevClose) * h.quantity;
+        hasLivePrices = true;
       } else {
         liveCurrentValue += h.investedValue;
       }
     }
 
-    const hasHoldings = positionList.length > 0 || holdingList.length > 0;
-    const currentValue = hasHoldings ? liveCurrentValue : (s?.currentValue ?? 0);
-    const totalPnl = hasHoldings ? currentValue - totalInvested : (s?.totalPnl ?? 0);
+    const hasPositions = positionList.length > 0 || holdingList.length > 0;
+    const currentValue = hasPositions ? liveCurrentValue : (s?.currentValue ?? 0);
+    const totalPnl = hasPositions ? currentValue - totalInvested : (s?.totalPnl ?? 0);
     const totalPnlPercent = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
-    const dayPnl = hasHoldings ? liveDayPnl : (s?.dayPnl ?? 0);
+    const dayPnl = hasPositions && hasLivePrices ? liveDayPnl : (s?.dayPnl ?? 0);
 
     return { currentValue, totalPnl, totalPnlPercent, dayPnl, totalInvested, walletBalance };
   }, [prices, positionList, holdingList, s]);
@@ -204,28 +211,35 @@ export default function HomeScreen() {
         {/* Portfolio Card — live prices recalculate currentValue, P&L every tick */}
         <View style={styles.portfolioCard}>
           <Text style={styles.portfolioLabel}>PORTFOLIO VALUE</Text>
-          <Text style={styles.portfolioValue}>{formatINR(liveStats.currentValue)}</Text>
+          <FlashingPrice
+            value={liveStats.currentValue}
+            format={formatINR}
+            style={styles.portfolioValue}
+          />
           <View style={styles.pnlRow}>
             <View style={[styles.pnlChip, { backgroundColor: liveStats.totalPnl >= 0 ? colors.gainBg : colors.lossBg }]}>
               <Ionicons name={liveStats.totalPnl >= 0 ? "trending-up" : "trending-down"} size={14} color={liveStats.totalPnl >= 0 ? colors.gain : colors.loss} />
-              <Text style={{ color: liveStats.totalPnl >= 0 ? colors.gain : colors.loss, fontSize: 13, fontFamily: "Inter_600SemiBold", fontWeight: "600" as const }}>
-                {formatINR(liveStats.totalPnl)} ({formatPct(liveStats.totalPnlPercent)})
-              </Text>
+              <FlashingPrice
+                value={liveStats.totalPnl}
+                format={(v) => `${formatINR(v)} (${formatPct(liveStats.totalPnlPercent)})`}
+                style={{ color: liveStats.totalPnl >= 0 ? colors.gain : colors.loss, fontSize: 13, fontFamily: "Inter_600SemiBold", fontWeight: "600" as const }}
+              />
             </View>
             <Text style={{ color: colors.mutedForeground, fontSize: 11, fontFamily: "Inter_400Regular" }}>Total P&L</Text>
           </View>
           <View style={styles.statsRow}>
-            {[
-              { label: "Invested", value: formatINR(liveStats.totalInvested), pnl: undefined },
-              { label: "Day P&L", value: formatINR(liveStats.dayPnl), pnl: liveStats.dayPnl },
-            ].map(({ label, value, pnl }) => (
-              <View key={label} style={styles.statBox}>
-                <Text style={styles.statLabel}>{label.toUpperCase()}</Text>
-                <Text style={[styles.statValue, { color: pnl !== undefined ? ((pnl ?? 0) >= 0 ? colors.gain : colors.loss) : colors.foreground }]}>
-                  {value}
-                </Text>
-              </View>
-            ))}
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>INVESTED</Text>
+              <Text style={[styles.statValue, { color: colors.foreground }]}>{formatINR(liveStats.totalInvested)}</Text>
+            </View>
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>DAY P&L</Text>
+              <FlashingPrice
+                value={liveStats.dayPnl}
+                format={formatINR}
+                style={[styles.statValue, { color: liveStats.dayPnl >= 0 ? colors.gain : colors.loss }] as any}
+              />
+            </View>
           </View>
         </View>
 
