@@ -98,36 +98,53 @@ export default function Markets() {
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        {/* Gainers filter */}
         <button
+          type="button"
           onClick={() => toggleFilter("gainers")}
-          className={`rounded-lg p-3 text-center border transition-all ${
-            activeFilter === "gainers"
-              ? "bg-green-500/15 border-green-500/50 ring-1 ring-green-500/40"
-              : "bg-card border-border hover:border-green-500/40 hover:bg-green-500/5"
-          }`}
+          style={{
+            borderRadius: 10,
+            padding: "12px 16px",
+            textAlign: "center",
+            border: "2px solid",
+            cursor: "pointer",
+            transition: "all 0.15s ease",
+            background: activeFilter === "gainers" ? "rgba(34,197,94,0.18)" : "var(--card)",
+            borderColor: activeFilter === "gainers" ? "#22c55e" : "var(--border)",
+            boxShadow: activeFilter === "gainers" ? "0 0 0 3px rgba(34,197,94,0.25)" : "none",
+          }}
         >
-          <div className="flex items-center justify-center gap-1.5 mb-0.5">
-            <TrendingUp className="w-4 h-4 text-green-400" />
-            <span className="text-xl font-bold font-mono text-green-400">{gainers}</span>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 2 }}>
+            <TrendingUp style={{ width: 16, height: 16, color: "#4ade80" }} />
+            <span style={{ fontSize: 22, fontWeight: 700, fontFamily: "monospace", color: "#4ade80" }}>{gainers}</span>
           </div>
-          <div className={`text-xs font-medium ${activeFilter === "gainers" ? "text-green-400" : "text-muted-foreground"}`}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: activeFilter === "gainers" ? "#4ade80" : "var(--muted-foreground)" }}>
             {activeFilter === "gainers" ? "✓ Gainers" : "Gainers"}
           </div>
         </button>
+
+        {/* Losers filter */}
         <button
+          type="button"
           onClick={() => toggleFilter("losers")}
-          className={`rounded-lg p-3 text-center border transition-all ${
-            activeFilter === "losers"
-              ? "bg-red-500/15 border-red-500/50 ring-1 ring-red-500/40"
-              : "bg-card border-border hover:border-red-500/40 hover:bg-red-500/5"
-          }`}
+          style={{
+            borderRadius: 10,
+            padding: "12px 16px",
+            textAlign: "center",
+            border: "2px solid",
+            cursor: "pointer",
+            transition: "all 0.15s ease",
+            background: activeFilter === "losers" ? "rgba(239,68,68,0.18)" : "var(--card)",
+            borderColor: activeFilter === "losers" ? "#ef4444" : "var(--border)",
+            boxShadow: activeFilter === "losers" ? "0 0 0 3px rgba(239,68,68,0.25)" : "none",
+          }}
         >
-          <div className="flex items-center justify-center gap-1.5 mb-0.5">
-            <TrendingDown className="w-4 h-4 text-red-400" />
-            <span className="text-xl font-bold font-mono text-red-400">{losers}</span>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 2 }}>
+            <TrendingDown style={{ width: 16, height: 16, color: "#f87171" }} />
+            <span style={{ fontSize: 22, fontWeight: 700, fontFamily: "monospace", color: "#f87171" }}>{losers}</span>
           </div>
-          <div className={`text-xs font-medium ${activeFilter === "losers" ? "text-red-400" : "text-muted-foreground"}`}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: activeFilter === "losers" ? "#f87171" : "var(--muted-foreground)" }}>
             {activeFilter === "losers" ? "✓ Losers" : "Losers"}
           </div>
         </button>
