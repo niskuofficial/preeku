@@ -10,6 +10,7 @@ import { useGetPortfolioSummary, useGetWatchlist, useGetMarketHeatmap } from "@w
 import { useColors } from "@/hooks/useColors";
 import { useTradingContext } from "@/context/TradingContext";
 import { FlashingPrice } from "@/components/FlashingPrice";
+import { useLivePrice } from "@/context/LivePricesContext";
 
 function formatINR(n: number) {
   if (Math.abs(n) >= 1e7) return "₹" + (n / 1e7).toFixed(2) + "Cr";
@@ -34,6 +35,35 @@ interface Summary {
   walletBalance: number; currentValue: number; totalPnl: number;
   totalPnlPercent: number; dayPnl: number; dayPnlPercent: number;
   totalInvested: number; openPositions: number; totalHoldings: number;
+}
+
+function WatchlistRow({ item, colors, onPress }: { item: WatchlistItem; colors: ReturnType<typeof useColors>; onPress: () => void }) {
+  const live = useLivePrice(item.symbol);
+  const price = live?.ltp ?? item.currentPrice;
+  const changePct = live?.changePercent ?? item.changePercent;
+  return (
+    <TouchableOpacity
+      style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, paddingHorizontal: 16, paddingVertical: 14 }}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 12, flex: 1 }}>
+        <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: colors.primary + "18", alignItems: "center" as const, justifyContent: "center" as const }}>
+          <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "700" as const, fontFamily: "Inter_700Bold" }}>{item.symbol.slice(0, 2)}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 15, fontWeight: "700" as const, color: colors.foreground, fontFamily: "Inter_700Bold" }}>{item.symbol}</Text>
+          <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 }} numberOfLines={1}>{item.name}</Text>
+        </View>
+      </View>
+      <View style={{ alignItems: "flex-end" }}>
+        <FlashingPrice value={price} symbol={item.symbol} style={{ fontSize: 15, fontWeight: "600" as const, color: colors.foreground, fontFamily: "Inter_600SemiBold", textAlign: "right" as const }} />
+        <Text style={{ fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "right" as const, marginTop: 2, color: changePct >= 0 ? colors.gain : colors.loss }}>
+          {formatPct(changePct)}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
 }
 
 function HeatBlock({ symbol, changePercent, colors }: { symbol: string; changePercent: number; colors: ReturnType<typeof useColors> }) {
@@ -167,30 +197,11 @@ export default function HomeScreen() {
             <View style={styles.watchlistCard}>
               {watchlistItems.map((item, idx) => (
                 <React.Fragment key={item.symbol}>
-                  <TouchableOpacity
-                    style={styles.watchlistRow}
+                  <WatchlistRow
+                    item={item}
+                    colors={colors}
                     onPress={() => router.push(`/stock/${item.symbol}`)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 12, flex: 1 }}>
-                      <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: colors.primary + "18", alignItems: "center" as const, justifyContent: "center" as const }}>
-                        <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "700" as const, fontFamily: "Inter_700Bold" }}>{item.symbol.slice(0, 2)}</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.watchlistSym}>{item.symbol}</Text>
-                        <Text style={styles.watchlistName} numberOfLines={1}>{item.name}</Text>
-                      </View>
-                    </View>
-                    <View style={{ alignItems: "flex-end" }}>
-                      <FlashingPrice
-                        value={item.currentPrice}
-                        style={styles.watchlistPrice}
-                      />
-                      <Text style={[styles.watchlistChg, { color: item.changePercent >= 0 ? colors.gain : colors.loss }]}>
-                        {formatPct(item.changePercent)}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
+                  />
                   {idx < watchlistItems.length - 1 && <View style={styles.separator} />}
                 </React.Fragment>
               ))}

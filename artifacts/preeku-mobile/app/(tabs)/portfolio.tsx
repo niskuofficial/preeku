@@ -8,6 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useGetPositions, useGetHoldings, useGetPortfolioSummary } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useTradingContext } from "@/context/TradingContext";
+import { useLivePrice, useLivePrices } from "@/context/LivePricesContext";
 import * as Haptics from "expo-haptics";
 
 interface Position {
@@ -34,7 +35,12 @@ function formatPct(n: number) {
 }
 
 function PositionCard({ item, colors, onExit }: { item: Position; colors: ReturnType<typeof useColors>; onExit: () => void }) {
-  const isUp = item.pnl >= 0;
+  const live = useLivePrice(item.symbol);
+  const ltp = live?.ltp ?? item.currentPrice;
+  const currentValue = ltp * item.quantity;
+  const pnl = currentValue - item.investedValue;
+  const pnlPercent = item.investedValue > 0 ? (pnl / item.investedValue) * 100 : 0;
+  const isUp = pnl >= 0;
   return (
     <View style={{ backgroundColor: colors.card, borderRadius: 14, marginHorizontal: 16, marginBottom: 10, borderWidth: 1, borderColor: colors.border, padding: 16 }}>
       <View style={{ flexDirection: "row" as const, justifyContent: "space-between" as const, alignItems: "flex-start" as const, marginBottom: 12 }}>
@@ -49,19 +55,19 @@ function PositionCard({ item, colors, onExit }: { item: Position; colors: Return
         </View>
         <View style={{ alignItems: "flex-end" as const }}>
           <Text style={{ fontSize: 15, fontWeight: "700" as const, color: isUp ? colors.gain : colors.loss, fontFamily: "Inter_700Bold" }}>
-            {isUp ? "+" : ""}{formatINR(item.pnl)}
+            {isUp ? "+" : ""}{formatINR(pnl)}
           </Text>
           <View style={{ backgroundColor: isUp ? colors.gainBg : colors.lossBg, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, marginTop: 2 }}>
-            <Text style={{ fontSize: 11, color: isUp ? colors.gain : colors.loss, fontFamily: "Inter_600SemiBold", fontWeight: "600" as const }}>{formatPct(item.pnlPercent)}</Text>
+            <Text style={{ fontSize: 11, color: isUp ? colors.gain : colors.loss, fontFamily: "Inter_600SemiBold", fontWeight: "600" as const }}>{formatPct(pnlPercent)}</Text>
           </View>
         </View>
       </View>
       <View style={{ flexDirection: "row" as const, gap: 0, marginBottom: 12 }}>
         {[
           { label: "AVG COST", value: formatINR(item.avgBuyPrice) },
-          { label: "LTP", value: formatINR(item.currentPrice) },
+          { label: "LTP", value: formatINR(ltp) },
           { label: "INVESTED", value: formatINR(item.investedValue) },
-          { label: "VALUE", value: formatINR(item.currentValue) },
+          { label: "VALUE", value: formatINR(currentValue) },
         ].map(({ label, value }, idx) => (
           <View key={label} style={{ flex: 1, borderLeftWidth: idx > 0 ? 1 : 0, borderColor: colors.border, paddingLeft: idx > 0 ? 10 : 0 }}>
             <Text style={{ fontSize: 9, color: colors.mutedForeground, letterSpacing: 0.5, fontFamily: "Inter_400Regular" }}>{label}</Text>
@@ -77,7 +83,13 @@ function PositionCard({ item, colors, onExit }: { item: Position; colors: Return
 }
 
 function HoldingCard({ item, colors, onSell }: { item: Holding; colors: ReturnType<typeof useColors>; onSell: () => void }) {
-  const isUp = item.pnl >= 0;
+  const live = useLivePrice(item.symbol);
+  const ltp = live?.ltp ?? item.currentPrice;
+  const currentValue = ltp * item.quantity;
+  const pnl = currentValue - item.investedValue;
+  const pnlPercent = item.investedValue > 0 ? (pnl / item.investedValue) * 100 : 0;
+  const dayChangePct = live?.changePercent ?? item.dayChangePercent;
+  const isUp = pnl >= 0;
   return (
     <View style={{ backgroundColor: colors.card, borderRadius: 14, marginHorizontal: 16, marginBottom: 10, borderWidth: 1, borderColor: colors.border, padding: 16 }}>
       <View style={{ flexDirection: "row" as const, justifyContent: "space-between" as const, alignItems: "flex-start" as const, marginBottom: 12 }}>
@@ -92,19 +104,19 @@ function HoldingCard({ item, colors, onSell }: { item: Holding; colors: ReturnTy
         </View>
         <View style={{ alignItems: "flex-end" as const }}>
           <Text style={{ fontSize: 15, fontWeight: "700" as const, color: isUp ? colors.gain : colors.loss, fontFamily: "Inter_700Bold" }}>
-            {isUp ? "+" : ""}{formatINR(item.pnl)}
+            {isUp ? "+" : ""}{formatINR(pnl)}
           </Text>
           <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 }}>
-            Day: <Text style={{ color: item.dayChangePercent >= 0 ? colors.gain : colors.loss }}>{formatPct(item.dayChangePercent)}</Text>
+            Day: <Text style={{ color: dayChangePct >= 0 ? colors.gain : colors.loss }}>{formatPct(dayChangePct)}</Text>
           </Text>
         </View>
       </View>
       <View style={{ flexDirection: "row" as const, gap: 0, marginBottom: 12 }}>
         {[
           { label: "AVG COST", value: formatINR(item.avgBuyPrice) },
-          { label: "LTP", value: formatINR(item.currentPrice) },
+          { label: "LTP", value: formatINR(ltp) },
           { label: "QTY", value: String(item.quantity) },
-          { label: "RETURN", value: formatPct(item.pnlPercent) },
+          { label: "RETURN", value: formatPct(pnlPercent) },
         ].map(({ label, value }, idx) => (
           <View key={label} style={{ flex: 1, borderLeftWidth: idx > 0 ? 1 : 0, borderColor: colors.border, paddingLeft: idx > 0 ? 10 : 0 }}>
             <Text style={{ fontSize: 9, color: colors.mutedForeground, letterSpacing: 0.5, fontFamily: "Inter_400Regular" }}>{label}</Text>
@@ -126,6 +138,7 @@ export default function PortfolioScreen() {
   const { openOrderModal } = useTradingContext();
   const topInset = Platform.OS === "web" ? 67 : insets.top;
 
+  const { prices } = useLivePrices();
   const { data: positions, isLoading: posLoading, refetch: refetchPos } = useGetPositions();
   const { data: holdings, isLoading: holdLoading, refetch: refetchHold } = useGetHoldings();
   const { data: summary } = useGetPortfolioSummary();
@@ -203,6 +216,7 @@ export default function PortfolioScreen() {
       ) : tab === "positions" ? (
         <FlatList
           data={positionList}
+          extraData={prices}
           keyExtractor={(item) => String(item.id)}
           scrollEnabled={positionList.length > 0}
           contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 100 : 100 }}
@@ -225,6 +239,7 @@ export default function PortfolioScreen() {
       ) : (
         <FlatList
           data={holdingList}
+          extraData={prices}
           keyExtractor={(item) => String(item.id)}
           scrollEnabled={holdingList.length > 0}
           contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 100 : 100 }}
