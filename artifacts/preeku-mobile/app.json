@@ -9,14 +9,19 @@
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/icon.png",
+      "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#070c14"
     },
     "ios": {
       "supportsTablet": false
     },
-    "android": {},
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#070c14"
+      }
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },

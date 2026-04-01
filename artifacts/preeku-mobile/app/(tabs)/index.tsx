@@ -1,7 +1,7 @@
 import React from "react";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  RefreshControl, Platform,
+  RefreshControl, Platform, Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -108,7 +108,11 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.appName}>Preeku</Text>
+        <Image
+          source={require("@/assets/images/icon.png")}
+          style={{ width: 36, height: 36, borderRadius: 8 }}
+          resizeMode="contain"
+        />
         <View style={styles.badge}>
           <Text style={styles.badgeText}>Paper Trading</Text>
         </View>

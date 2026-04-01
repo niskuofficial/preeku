@@ -16,9 +16,7 @@ export default function Sidebar() {
     <aside className="flex flex-col w-16 lg:w-56 h-full bg-sidebar border-r border-sidebar-border shrink-0">
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
-        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shrink-0">
-          <span className="text-primary-foreground font-bold text-sm">P</span>
-        </div>
+        <img src="/logo.png" alt="Preeku" className="w-8 h-8 rounded-md object-contain shrink-0" />
         <span className="hidden lg:block font-bold text-foreground text-lg tracking-tight">Preeku</span>
       </div>
 
