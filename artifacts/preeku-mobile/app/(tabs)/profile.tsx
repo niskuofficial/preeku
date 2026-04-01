@@ -235,7 +235,7 @@ export default function ProfileScreen() {
           <View style={styles.accountCard}>
             {[
               { label: "Client ID", value: BROKER_ID },
-              { label: "Account Type", value: "Paper Trading" },
+              { label: "Account Type", value: "Trading & Investing" },
               { label: "Segment", value: "NSE · BSE · Equity" },
               { label: "Initial Capital", value: "₹10,00,000" },
               { label: "KYC Status", value: "Verified ✓" },
