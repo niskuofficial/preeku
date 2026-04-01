@@ -104,7 +104,7 @@ export default function LoginScreen() {
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#22c55e" }} />
               <Text style={{ fontSize: 13, color: labelColor, fontFamily: "Inter_400Regular" }}>
-                Live NSE paper trading
+                Login to get access of account
               </Text>
             </View>
           </View>
@@ -246,7 +246,7 @@ export default function LoginScreen() {
             textAlign: "center", marginTop: 22,
             color: labelColor, fontSize: 12.5, fontFamily: "Inter_400Regular",
           }}>
-            Paper trading only · No real money involved
+            Preeku Version 1.1.0
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
