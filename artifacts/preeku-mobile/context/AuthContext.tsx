@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { setDefaultHeaders } from "@workspace/api-client-react";
 
 interface AuthContextValue {
   isLoggedIn: boolean;
@@ -62,6 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     (async () => {
       const devId = await getOrCreateDeviceId();
+      setDefaultHeaders({ "x-device-id": devId });
       const [loggedIn, name, email] = await Promise.all([
         AsyncStorage.getItem(AUTH_KEY),
         AsyncStorage.getItem(NAME_KEY),
@@ -80,6 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (name: string, email: string) => {
     const devId = await getOrCreateDeviceId();
+    setDefaultHeaders({ "x-device-id": devId });
     await AsyncStorage.multiSet([
       [AUTH_KEY, "true"],
       [NAME_KEY, name],

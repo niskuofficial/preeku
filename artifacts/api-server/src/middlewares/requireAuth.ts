@@ -5,6 +5,23 @@ import { usersTable } from "@workspace/db/schema";
 import { eq, count } from "drizzle-orm";
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
+  const deviceId = req.headers["x-device-id"] as string | undefined;
+
+  if (deviceId) {
+    try {
+      const mobileClerkId = `mobile_${deviceId}`;
+      const existing = await db.select().from(usersTable).where(eq(usersTable.clerkId, mobileClerkId)).limit(1);
+      if (existing.length > 0) {
+        if (existing[0].isBlocked) {
+          return res.status(403).json({ error: "Account is blocked. Contact support." });
+        }
+        (req as any).userId = mobileClerkId;
+        return next();
+      }
+    } catch (_) {}
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
   const auth = getAuth(req);
   const userId = auth?.userId;
   if (!userId) {
@@ -17,7 +34,6 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     if (existing.length === 0) {
       const email = (auth as any)?.sessionClaims?.email ?? "";
       const name = (auth as any)?.sessionClaims?.name ?? (auth as any)?.sessionClaims?.firstName ?? "";
-      // Check if any admin exists — first user to sign up becomes admin
       const [adminCount] = await db.select({ count: count() }).from(usersTable).where(eq(usersTable.isAdmin, true));
       const isFirstAdmin = adminCount.count === 0;
       await db.insert(usersTable).values({ clerkId: userId, email, name, isAdmin: isFirstAdmin });
