@@ -5,6 +5,7 @@ import { useTradingContext } from "@/context/TradingContext";
 import { useLivePrices, useLivePrice } from "@/context/LivePricesContext";
 import { LivePriceRow } from "@/components/FlashingPrice";
 import { TrendingUp, TrendingDown, Wallet, BarChart3, ArrowUpRight, ArrowDownRight, Clock, Activity } from "lucide-react";
+import StockLogo from "@/components/StockLogo";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { useEffect, useRef, useState } from "react";
 
@@ -356,12 +357,7 @@ export default function Dashboard() {
                 onClick={() => openOrderWindow({ symbol: stock.symbol, name: stock.name, currentPrice: stock.ltp })}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-bold text-white"
-                    style={{ background: stock.chgPct >= 0 ? "rgba(34,197,94,0.2)" : "rgba(239,68,68,0.2)", color: stock.chgPct >= 0 ? "#4ade80" : "#f87171" }}
-                  >
-                    {stock.symbol.slice(0, 2)}
-                  </div>
+                  <StockLogo symbol={stock.symbol} size={32} />
                   <div className="min-w-0">
                     <div className="font-semibold text-foreground text-sm">{stock.symbol}</div>
                     <div className="text-muted-foreground text-xs truncate max-w-[140px]">{stock.sector}</div>

@@ -9,6 +9,7 @@ import { useRecentSearches } from "@/hooks/useRecentSearches";
 import { Search, TrendingUp, TrendingDown, Loader2, Bookmark, BookmarkCheck } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import StockLogo from "@/components/StockLogo";
 
 const INITIAL_SIZE = 20;
 const LOAD_MORE_SIZE = 10;
@@ -203,8 +204,13 @@ export default function Markets() {
                   onClick={() => addRecent({ symbol: stock.symbol, name: stock.name, sector: stock.sector, exchange: stock.exchange, viewedAt: Date.now() })}
                 >
                   <td className="py-3 px-4">
-                    <div className="font-semibold text-foreground">{stock.symbol}</div>
-                    <div className="text-muted-foreground text-xs">{stock.sector}</div>
+                    <div className="flex items-center gap-2.5">
+                      <StockLogo symbol={stock.symbol} size={32} />
+                      <div>
+                        <div className="font-semibold text-foreground">{stock.symbol}</div>
+                        <div className="text-muted-foreground text-xs">{stock.sector}</div>
+                      </div>
+                    </div>
                   </td>
                   <td className="py-3 px-4 text-muted-foreground max-w-[180px] truncate text-sm">{stock.name}</td>
                   <td className="py-3 px-4 text-right">

@@ -3,6 +3,7 @@ import { useGetPositions, useGetHoldings, useGetPortfolioSummary } from "@worksp
 import { formatINR, formatPercent, pnlClass, pnlBgClass } from "@/lib/format";
 import { useTradingContext } from "@/context/TradingContext";
 import { BarChart3, TrendingUp, TrendingDown } from "lucide-react";
+import StockLogo from "@/components/StockLogo";
 
 interface Position {
   id: number; symbol: string; stockName: string; quantity: number;
@@ -99,8 +100,13 @@ export default function Portfolio() {
                 {positionList.map((pos) => (
                   <tr key={pos.id} className="border-b border-border/50 hover:bg-accent/30" data-testid={`position-row-${pos.symbol}`}>
                     <td className="py-3 px-4">
-                      <div className="font-bold text-foreground">{pos.symbol}</div>
-                      <div className="text-muted-foreground text-xs">{pos.productType}</div>
+                      <div className="flex items-center gap-2.5">
+                        <StockLogo symbol={pos.symbol} size={30} />
+                        <div>
+                          <div className="font-bold text-foreground">{pos.symbol}</div>
+                          <div className="text-muted-foreground text-xs">{pos.productType}</div>
+                        </div>
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-right font-mono text-foreground">{pos.quantity}</td>
                     <td className="py-3 px-4 text-right font-mono text-foreground">{formatINR(pos.avgBuyPrice)}</td>
@@ -145,8 +151,13 @@ export default function Portfolio() {
                 {holdingList.map((h) => (
                   <tr key={h.id} className="border-b border-border/50 hover:bg-accent/30" data-testid={`holding-row-${h.symbol}`}>
                     <td className="py-3 px-4">
-                      <div className="font-bold text-foreground">{h.symbol}</div>
-                      <div className="text-muted-foreground text-xs truncate max-w-[120px]">{h.stockName}</div>
+                      <div className="flex items-center gap-2.5">
+                        <StockLogo symbol={h.symbol} size={30} />
+                        <div>
+                          <div className="font-bold text-foreground">{h.symbol}</div>
+                          <div className="text-muted-foreground text-xs truncate max-w-[120px]">{h.stockName}</div>
+                        </div>
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-right font-mono text-foreground">{h.quantity}</td>
                     <td className="py-3 px-4 text-right font-mono text-foreground">{formatINR(h.avgBuyPrice)}</td>
