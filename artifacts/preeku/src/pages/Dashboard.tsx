@@ -82,45 +82,60 @@ function FlashingStat({ label, value, sub, positive, icon: Icon }: {
 
 function HeatmapBlock({ sector, stocks }: {
   sector: string;
+  changePercent: number;
   stocks: { symbol: string; name: string; changePercent: number; marketCap: number }[];
 }) {
-  const sectorChange = stocks.length > 0 ? stocks.reduce((acc, s) => acc + s.changePercent, 0) / stocks.length : 0;
   const { openOrderWindow } = useTradingContext();
   const { prices } = useLivePrices();
 
-  const getColor = (pct: number) => {
-    if (pct > 2) return "bg-green-500";
-    if (pct > 1) return "bg-green-600";
-    if (pct > 0) return "bg-green-800";
-    if (pct > -1) return "bg-red-800";
-    if (pct > -2) return "bg-red-600";
-    return "bg-red-500";
+  const enriched = stocks
+    .map((s) => ({ ...s, pct: prices[s.symbol]?.changePercent ?? s.changePercent, ltp: prices[s.symbol]?.ltp ?? 0 }))
+    .filter((s) => s.pct !== 0)
+    .sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct))
+    .slice(0, 6);
+
+  if (enriched.length === 0) return null;
+
+  const liveSectorAvg = enriched.reduce((acc, s) => acc + s.pct, 0) / enriched.length;
+
+  const getTileStyle = (pct: number): React.CSSProperties => {
+    if (pct > 2) return { background: "#16a34a" };
+    if (pct > 1) return { background: "#15803d" };
+    if (pct > 0) return { background: "#166534" };
+    if (pct > -1) return { background: "#7f1d1d" };
+    if (pct > -2) return { background: "#991b1b" };
+    return { background: "#dc2626" };
   };
 
   return (
-    <div className="rounded-lg p-3 border border-border/50 bg-background/50">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold text-foreground">{sector}</span>
-        <span className={`text-xs font-mono ${sectorChange >= 0 ? "text-green-400" : "text-red-400"}`}>
-          {formatPercent(sectorChange)}
+    <div className="mb-5">
+      <div className="flex items-center gap-3 mb-2">
+        <span className="text-sm font-bold text-foreground">{sector}</span>
+        <span
+          className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full"
+          style={{
+            background: liveSectorAvg >= 0 ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)",
+            color: liveSectorAvg >= 0 ? "#4ade80" : "#f87171",
+          }}
+        >
+          {liveSectorAvg >= 0 ? "+" : ""}{liveSectorAvg.toFixed(2)}%
         </span>
       </div>
-      <div className="grid grid-cols-2 gap-1">
-        {stocks.slice(0, 4).map((s) => {
-          const live = prices[s.symbol];
-          const pct = live?.changePercent ?? s.changePercent;
-          return (
-            <button
-              key={s.symbol}
-              onClick={() => openOrderWindow({ symbol: s.symbol, name: s.name, currentPrice: live?.ltp ?? 0 })}
-              data-testid={`heatmap-stock-${s.symbol}`}
-              className={`${getColor(pct)} rounded p-1.5 text-left transition-opacity hover:opacity-80`}
-            >
-              <div className="text-white text-xs font-bold">{s.symbol}</div>
-              <div className="text-white/80 text-xs font-mono">{formatPercent(pct)}</div>
-            </button>
-          );
-        })}
+      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(enriched.length, 4)}, 1fr)` }}>
+        {enriched.slice(0, 4).map((s) => (
+          <button
+            key={s.symbol}
+            onClick={() => openOrderWindow({ symbol: s.symbol, name: s.name, currentPrice: s.ltp })}
+            data-testid={`heatmap-stock-${s.symbol}`}
+            className="rounded-lg p-3 text-left transition-all hover:brightness-110 cursor-pointer"
+            style={getTileStyle(s.pct)}
+          >
+            <div className="text-white text-xs font-bold truncate leading-tight">{s.symbol}</div>
+            <div className="text-white/85 text-xs font-mono mt-1 font-semibold">
+              {s.pct >= 0 ? "+" : ""}{s.pct.toFixed(2)}%
+            </div>
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -333,14 +348,18 @@ export default function Dashboard() {
 
       {/* Market Heatmap */}
       <div className="bg-card border border-border rounded-xl p-5">
-        <h2 className="font-semibold text-foreground mb-4">Market Heatmap</h2>
+        <h2 className="font-semibold text-foreground mb-5">Market Heatmap</h2>
         {heatmapData.length === 0 ? (
-          <p className="text-muted-foreground text-sm text-center py-6">Loading heatmap...</p>
+          <p className="text-muted-foreground text-sm text-center py-6">Loading live data...</p>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3" data-testid="market-heatmap">
-            {heatmapData.map((sector: { sector: string; changePercent: number; stocks: { symbol: string; name: string; changePercent: number; marketCap: number }[] }) => (
-              <HeatmapBlock key={sector.sector} {...sector} />
-            ))}
+          <div data-testid="market-heatmap">
+            {heatmapData
+              .filter((sec: { sector: string; changePercent: number; stocks: { symbol: string; name: string; changePercent: number; marketCap: number }[] }) =>
+                sec.stocks.some((s) => s.changePercent !== 0)
+              )
+              .map((sector: { sector: string; changePercent: number; stocks: { symbol: string; name: string; changePercent: number; marketCap: number }[] }) => (
+                <HeatmapBlock key={sector.sector} {...sector} />
+              ))}
           </div>
         )}
       </div>
