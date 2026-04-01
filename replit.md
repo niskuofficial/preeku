@@ -54,7 +54,14 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 
 Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` for request and response validation and `@workspace/db` for persistence.
 
-- Entry: `src/index.ts` — reads `PORT`, starts Express
+**Real-Time Price Architecture:**
+- `src/angel/smartstream.ts` — Angel One SmartStream WebSocket client; connects to `wss://smartapisocket.angelone.in/smart-stream`, subscribes to 27 NSE tokens in Quote mode (binary parse), emits `tick` EventEmitter events
+- `src/angel/priceHub.ts` — WebSocket broadcast server at `/ws/prices`; listens to SmartStream tick events and broadcasts to all connected mobile clients as `{type:"tick",data:PriceTick}` or `{type:"snapshot"}` on connect
+- `src/angel/priceSync.ts` — REST fallback every 30s via Angel One Quote API; also emits ticks via SmartStream EventEmitter so priceHub broadcasts REST prices too
+- `src/angel/client.ts` — Angel One session management with login mutex (prevents concurrent login races)
+- Routing: `/ws` path added to artifact.toml so Replit proxy routes WebSocket connections to API server
+
+- Entry: `src/index.ts` — reads `PORT`, starts Express + HTTP server, creates PriceHub, starts SmartStream
 - App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
 - Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
 - Depends on: `@workspace/db`, `@workspace/api-zod`

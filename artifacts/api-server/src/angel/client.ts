@@ -15,6 +15,7 @@ interface AngelSession {
 }
 
 let session: AngelSession | null = null;
+let loginPromise: Promise<AngelSession> | null = null;
 
 function generateTOTP(): string {
   const secret = OTPAuth.Secret.fromBase32(TOTP_SECRET.toUpperCase().trim());
@@ -73,7 +74,9 @@ export async function login(): Promise<AngelSession> {
 
 export async function getSession(): Promise<AngelSession> {
   if (session && Date.now() < session.expiresAt) return session;
-  return login();
+  if (loginPromise) return loginPromise;
+  loginPromise = login().finally(() => { loginPromise = null; });
+  return loginPromise;
 }
 
 export interface QuoteData {

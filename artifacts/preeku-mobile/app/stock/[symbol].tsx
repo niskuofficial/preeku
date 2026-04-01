@@ -11,6 +11,7 @@ import { useGetStock } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useTradingContext } from "@/context/TradingContext";
 import { FlashingPrice, FlashingChange } from "@/components/FlashingPrice";
+import { useLivePrice } from "@/context/LivePricesContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CHART_WIDTH = SCREEN_WIDTH - 32;
@@ -145,8 +146,10 @@ export default function StockDetailScreen() {
   const { openOrderModal } = useTradingContext();
 
   const { data: stock, isLoading, refetch } = useGetStock(symbol ?? "", {
-    query: { refetchInterval: 15000, enabled: !!symbol },
+    query: { refetchInterval: 30000, enabled: !!symbol },
   });
+
+  const livePrice = useLivePrice(symbol);
 
   const s = stock as {
     symbol: string; name: string; exchange: string; sector: string;
@@ -155,7 +158,14 @@ export default function StockDetailScreen() {
     priceHistory?: PricePoint[];
   } | undefined;
 
-  const isUp = (s?.changePercent ?? 0) >= 0;
+  const currentPrice = livePrice?.ltp ?? s?.currentPrice ?? 0;
+  const change = livePrice?.change ?? s?.change ?? 0;
+  const changePercent = livePrice?.changePercent ?? s?.changePercent ?? 0;
+  const high = livePrice?.high || s?.high || 0;
+  const low = livePrice?.low || s?.low || 0;
+  const volume = livePrice?.volume || s?.volume || 0;
+
+  const isUp = changePercent >= 0;
   const gainColor = colors.gain;
   const lossColor = colors.loss;
   const priceColor = isUp ? gainColor : lossColor;
@@ -217,15 +227,17 @@ export default function StockDetailScreen() {
             {/* Price block */}
             <View style={{ paddingTop: 20, paddingBottom: 16 }}>
               <FlashingPrice
-                value={s.currentPrice}
+                value={currentPrice}
+                symbol={s.symbol}
                 style={{ fontSize: 38, fontWeight: "700", fontFamily: "Inter_700Bold", letterSpacing: -0.5, color: colors.foreground }}
               />
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: priceColor + "18", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }}>
                   <Ionicons name={isUp ? "trending-up" : "trending-down"} size={14} color={priceColor} />
                   <FlashingChange
-                    change={s.change}
-                    changePercent={s.changePercent}
+                    change={change}
+                    changePercent={changePercent}
+                    symbol={s.symbol}
                     style={{ fontSize: 14, fontWeight: "700", fontFamily: "Inter_700Bold" }}
                   />
                 </View>
@@ -252,16 +264,16 @@ export default function StockDetailScreen() {
             {/* Stats Grid */}
             <View style={{ gap: 10 }}>
               <View style={{ flexDirection: "row", gap: 10 }}>
-                <StatCard label="Today High" value={formatINR(s.high)} color={gainColor} colors={colors} />
-                <StatCard label="Today Low" value={formatINR(s.low)} color={lossColor} colors={colors} />
+                <StatCard label="Today High" value={formatINR(high)} color={gainColor} colors={colors} />
+                <StatCard label="Today Low" value={formatINR(low)} color={lossColor} colors={colors} />
               </View>
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <StatCard label="Prev. Close" value={formatINR(s.previousClose)} colors={colors} />
-                <StatCard label="Volume" value={formatVol(s.volume)} colors={colors} />
+                <StatCard label="Volume" value={formatVol(volume)} colors={colors} />
               </View>
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <StatCard label="Market Cap" value={formatINR(s.marketCap)} colors={colors} />
-                <StatCard label="Change" value={`${isUp ? "+" : ""}${s.changePercent.toFixed(2)}%`} color={priceColor} colors={colors} />
+                <StatCard label="Change" value={`${isUp ? "+" : ""}${changePercent.toFixed(2)}%`} color={priceColor} colors={colors} />
               </View>
             </View>
 
@@ -271,9 +283,8 @@ export default function StockDetailScreen() {
               <View style={{ position: "relative" }}>
                 <View style={{ height: 6, backgroundColor: colors.border, borderRadius: 3 }} />
                 {(() => {
-                  const low = s.low, high = s.high, cur = s.currentPrice;
                   const range = high - low || 1;
-                  const pct = Math.max(0, Math.min(1, (cur - low) / range));
+                  const pct = Math.max(0, Math.min(1, (currentPrice - low) / range));
                   return (
                     <>
                       <View style={{ position: "absolute", top: 0, left: 0, width: `${pct * 100}%`, height: 6, backgroundColor: priceColor, borderRadius: 3 }} />
@@ -283,9 +294,9 @@ export default function StockDetailScreen() {
                 })()}
               </View>
               <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 8 }}>
-                <Text style={{ fontSize: 12, color: lossColor, fontFamily: "Inter_600SemiBold", fontWeight: "600" }}>₹{s.low.toFixed(2)}</Text>
-                <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>Current: ₹{s.currentPrice.toFixed(2)}</Text>
-                <Text style={{ fontSize: 12, color: gainColor, fontFamily: "Inter_600SemiBold", fontWeight: "600" }}>₹{s.high.toFixed(2)}</Text>
+                <Text style={{ fontSize: 12, color: lossColor, fontFamily: "Inter_600SemiBold", fontWeight: "600" }}>₹{low.toFixed(2)}</Text>
+                <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>Current: ₹{currentPrice.toFixed(2)}</Text>
+                <Text style={{ fontSize: 12, color: gainColor, fontFamily: "Inter_600SemiBold", fontWeight: "600" }}>₹{high.toFixed(2)}</Text>
               </View>
             </View>
           </ScrollView>
@@ -322,7 +333,7 @@ export default function StockDetailScreen() {
                 elevation: 4,
               }}
               activeOpacity={0.85}
-              onPress={() => openOrderModal({ symbol: s.symbol, name: s.name, currentPrice: s.currentPrice }, "BUY")}
+              onPress={() => openOrderModal({ symbol: s.symbol, name: s.name, currentPrice }, "BUY")}
             >
               <Ionicons name="trending-up" size={18} color="#fff" />
               <Text style={{ color: "#fff", fontSize: 17, fontWeight: "700", fontFamily: "Inter_700Bold" }}>BUY</Text>
@@ -345,7 +356,7 @@ export default function StockDetailScreen() {
                 elevation: 4,
               }}
               activeOpacity={0.85}
-              onPress={() => openOrderModal({ symbol: s.symbol, name: s.name, currentPrice: s.currentPrice }, "SELL")}
+              onPress={() => openOrderModal({ symbol: s.symbol, name: s.name, currentPrice }, "SELL")}
             >
               <Ionicons name="trending-down" size={18} color="#fff" />
               <Text style={{ color: "#fff", fontSize: 17, fontWeight: "700", fontFamily: "Inter_700Bold" }}>SELL</Text>

@@ -1,13 +1,14 @@
+import http from "http";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startPriceSync } from "./angel/priceSync";
+import { smartStream } from "./angel/smartstream";
+import { createPriceHub } from "./angel/priceHub";
 
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
+  throw new Error("PORT environment variable is required but was not provided.");
 }
 
 const port = Number(rawPort);
@@ -16,17 +17,23 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
-  }
+const server = http.createServer(app);
 
+server.listen(port, async () => {
   logger.info({ port }, "Server listening");
 
+  createPriceHub(server);
+
   if (process.env.ANGEL_API_KEY && process.env.ANGEL_CLIENT_ID) {
-    logger.info("Starting Angel One live price sync...");
+    logger.info("Starting Angel One price sync (REST fallback every 30s)...");
     startPriceSync(30000);
+
+    logger.info("Connecting to Angel One SmartStream WebSocket...");
+    try {
+      await smartStream.start();
+    } catch (err) {
+      logger.warn({ err }, "SmartStream failed to start — falling back to REST polling");
+    }
   } else {
     logger.warn("Angel One credentials not configured — using mock prices");
   }

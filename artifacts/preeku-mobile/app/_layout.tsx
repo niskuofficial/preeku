@@ -16,6 +16,7 @@ import { setBaseUrl } from "@workspace/api-client-react";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { TradingProvider } from "@/context/TradingContext";
+import { LivePricesProvider } from "@/context/LivePricesContext";
 import OrderModal from "@/components/OrderModal";
 
 if (process.env.EXPO_PUBLIC_DOMAIN) {
@@ -28,12 +29,15 @@ const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   return (
-    <TradingProvider>
-      <Stack screenOptions={{ headerBackTitle: "Back" }}>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      </Stack>
-      <OrderModal />
-    </TradingProvider>
+    <LivePricesProvider>
+      <TradingProvider>
+        <Stack screenOptions={{ headerBackTitle: "Back" }}>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="stock/[symbol]" options={{ headerShown: false }} />
+        </Stack>
+        <OrderModal />
+      </TradingProvider>
+    </LivePricesProvider>
   );
 }
 

@@ -10,6 +10,7 @@ import { useListStocks, getListStocksQueryKey } from "@workspace/api-client-reac
 import { useColors } from "@/hooks/useColors";
 import { useTradingContext } from "@/context/TradingContext";
 import { FlashingPrice } from "@/components/FlashingPrice";
+import { useLivePrices } from "@/context/LivePricesContext";
 
 interface Stock {
   symbol: string; name: string; exchange: string; sector: string;
@@ -39,10 +40,11 @@ function StockRow({ item, onPress, onBuy, onSell, colors }: {
         <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 1 }} numberOfLines={1}>{item.sector}</Text>
       </View>
 
-      {/* Flashing price + change */}
+      {/* Flashing price + change (live from WebSocket) */}
       <View style={{ alignItems: "flex-end", marginRight: 10 }}>
         <FlashingPrice
           value={item.currentPrice}
+          symbol={item.symbol}
           style={{ fontSize: 15, fontWeight: "600", fontFamily: "Inter_600SemiBold", color: colors.foreground }}
         />
         <View style={{ flexDirection: "row", alignItems: "center", gap: 2, marginTop: 2 }}>
@@ -79,6 +81,7 @@ export default function MarketsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { openOrderModal } = useTradingContext();
+  const { connected } = useLivePrices();
   const [search, setSearch] = useState("");
   const params = search.trim() ? { search: search.trim() } : undefined;
   const { data: stocks, isLoading, refetch } = useListStocks(params, {
@@ -96,8 +99,14 @@ export default function MarketsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
-      <View style={{ paddingTop: topInset + 12, paddingHorizontal: 20, paddingBottom: 12 }}>
+      <View style={{ paddingTop: topInset + 12, paddingHorizontal: 20, paddingBottom: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <Text style={{ fontSize: 22, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" }}>Markets</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: connected ? colors.gain + "18" : colors.border, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: connected ? colors.gain + "44" : colors.border }}>
+          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: connected ? colors.gain : colors.mutedForeground }} />
+          <Text style={{ fontSize: 11, fontFamily: "Inter_500Medium", fontWeight: "500", color: connected ? colors.gain : colors.mutedForeground }}>
+            {connected ? "LIVE" : "Polling"}
+          </Text>
+        </View>
       </View>
 
       {/* Search */}

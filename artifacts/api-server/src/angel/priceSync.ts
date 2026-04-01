@@ -1,6 +1,8 @@
 import { db, stocksTable } from "@workspace/db";
 import { getMarketQuotes } from "./client";
 import { eq } from "drizzle-orm";
+import { smartStream } from "./smartstream";
+import type { PriceTick } from "./smartstream";
 
 const SYMBOL_TOKEN_MAP: Record<string, { token: string; exchange: string; angelSymbol: string }> = {
   RELIANCE: { token: "2885", exchange: "NSE", angelSymbol: "RELIANCE-EQ" },
@@ -68,6 +70,23 @@ export async function syncPrices(force = false): Promise<{ synced: number; error
           updatedAt: new Date(),
         })
         .where(eq(stocksTable.symbol, symbol));
+
+      const prevClose = quote.close > 0 ? quote.close : quote.ltp;
+      const change = quote.ltp - prevClose;
+      const tick: PriceTick = {
+        token: meta.token,
+        symbol,
+        ltp: quote.ltp,
+        open: quote.open ?? 0,
+        high: quote.high ?? 0,
+        low: quote.low ?? 0,
+        close: prevClose,
+        volume: quote.volume ?? 0,
+        change,
+        changePercent: prevClose > 0 ? (change / prevClose) * 100 : 0,
+        timestamp: Date.now(),
+      };
+      smartStream.emit("tick", tick);
 
       synced++;
     }
