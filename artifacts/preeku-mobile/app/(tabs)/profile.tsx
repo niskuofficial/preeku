@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Platform, TextInput, Alert, Image, Switch,
+  Platform, TextInput, Alert, Image, Switch, Modal, Pressable,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -64,6 +64,8 @@ export default function ProfileScreen() {
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
   const [addingBalance, setAddingBalance] = useState(false);
+  const [showPhotoPicker, setShowPhotoPicker] = useState(false);
+  const [showLogout, setShowLogout] = useState(false);
 
   const { data: summary } = useGetPortfolioSummary();
   const { data: wallet } = useGetWallet();
@@ -150,36 +152,39 @@ export default function ProfileScreen() {
   };
 
   const pickAvatar = () => {
-    Alert.alert("Profile Photo", "Choose an option", [
-      {
-        text: "Camera",
-        onPress: async () => {
-          const perm = await ImagePicker.requestCameraPermissionsAsync();
-          if (!perm.granted) { Alert.alert("Permission needed", "Allow camera access to take a photo."); return; }
-          const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.7 });
-          if (!result.canceled && result.assets[0]) {
-            setAvatarUri(result.assets[0].uri);
-            AsyncStorage.setItem("preeku_avatar", result.assets[0].uri);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          }
-        },
-      },
-      {
-        text: "Choose from Gallery",
-        onPress: async () => {
-          const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-          if (!perm.granted) { Alert.alert("Permission needed", "Allow gallery access to pick a photo."); return; }
-          const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: "images", allowsEditing: true, aspect: [1, 1], quality: 0.7 });
-          if (!result.canceled && result.assets[0]) {
-            setAvatarUri(result.assets[0].uri);
-            AsyncStorage.setItem("preeku_avatar", result.assets[0].uri);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          }
-        },
-      },
-      { text: "Remove Photo", style: "destructive", onPress: () => { setAvatarUri(null); AsyncStorage.removeItem("preeku_avatar"); } },
-      { text: "Cancel", style: "cancel" },
-    ]);
+    Haptics.selectionAsync();
+    setShowPhotoPicker(true);
+  };
+
+  const pickFromCamera = async () => {
+    setShowPhotoPicker(false);
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) { Alert.alert("Permission needed", "Allow camera access to take a photo."); return; }
+    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+    if (!result.canceled && result.assets[0]) {
+      setAvatarUri(result.assets[0].uri);
+      AsyncStorage.setItem("preeku_avatar", result.assets[0].uri);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  };
+
+  const pickFromGallery = async () => {
+    setShowPhotoPicker(false);
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { Alert.alert("Permission needed", "Allow gallery access to pick a photo."); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: "images", allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+    if (!result.canceled && result.assets[0]) {
+      setAvatarUri(result.assets[0].uri);
+      AsyncStorage.setItem("preeku_avatar", result.assets[0].uri);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  };
+
+  const removePhoto = () => {
+    setShowPhotoPicker(false);
+    setAvatarUri(null);
+    AsyncStorage.removeItem("preeku_avatar");
+    Haptics.selectionAsync();
   };
 
   const initials = name.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
@@ -425,48 +430,155 @@ export default function ProfileScreen() {
         {/* Logout Button */}
         <View style={{ marginHorizontal: 16, marginBottom: 16 }}>
           <TouchableOpacity
-            onPress={() => {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-              Alert.alert(
-                "Log Out",
-                "Are you sure you want to log out?",
-                [
-                  { text: "Cancel", style: "cancel" },
-                  {
-                    text: "Log Out",
-                    style: "destructive",
-                    onPress: async () => {
-                      await logout();
-                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                    },
-                  },
-                ]
-              );
-            }}
+            onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); setShowLogout(true); }}
             activeOpacity={0.8}
             style={{
-              flexDirection: "row" as const,
-              alignItems: "center" as const,
-              justifyContent: "center" as const,
-              gap: 10,
-              backgroundColor: colors.loss + "15",
-              borderWidth: 1,
-              borderColor: colors.loss + "40",
-              borderRadius: 14,
-              paddingVertical: 15,
+              flexDirection: "row" as const, alignItems: "center" as const,
+              justifyContent: "center" as const, gap: 10,
+              backgroundColor: "#ef444418", borderWidth: 1, borderColor: "#ef444440",
+              borderRadius: 14, paddingVertical: 15,
             }}
           >
-            <Ionicons name="log-out-outline" size={20} color={colors.loss} />
-            <Text style={{ fontSize: 15, fontWeight: "600" as const, color: colors.loss, fontFamily: "Inter_600SemiBold" }}>
+            <Ionicons name="log-out-outline" size={20} color="#ef4444" />
+            <Text style={{ fontSize: 15, fontWeight: "600" as const, color: "#ef4444", fontFamily: "Inter_600SemiBold" }}>
               Log Out
             </Text>
           </TouchableOpacity>
         </View>
 
         <Text style={{ textAlign: "center" as const, color: colors.mutedForeground, fontSize: 12, fontFamily: "Inter_400Regular", paddingBottom: 8 }}>
-          Preeku Trading v1.0 
+          Preeku Version 1.1.0
         </Text>
       </ScrollView>
+
+      {/* ── Custom Photo Picker Bottom Sheet ── */}
+      <Modal visible={showPhotoPicker} transparent animationType="slide" onRequestClose={() => setShowPhotoPicker(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setShowPhotoPicker(false)}>
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={{
+              backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+              paddingBottom: insets.bottom + 16, paddingTop: 8,
+              borderTopWidth: 1, borderColor: colors.border,
+            }}>
+              {/* Handle bar */}
+              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: "center", marginBottom: 20 }} />
+
+              {/* Header */}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, marginBottom: 20 }}>
+                <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: colors.primary + "18", alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name="camera" size={22} color={colors.primary} />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 17, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" }}>Profile Photo</Text>
+                  <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 1 }}>Choose how to update your photo</Text>
+                </View>
+              </View>
+
+              {/* Options */}
+              <View style={{ marginHorizontal: 16, gap: 8 }}>
+                <TouchableOpacity
+                  onPress={pickFromCamera}
+                  activeOpacity={0.7}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: colors.primary + "12", borderRadius: 14, paddingHorizontal: 18, paddingVertical: 16, borderWidth: 1, borderColor: colors.primary + "25" }}
+                >
+                  <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: colors.primary + "20", alignItems: "center", justifyContent: "center" }}>
+                    <Ionicons name="camera-outline" size={20} color={colors.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: "600", color: colors.foreground, fontFamily: "Inter_600SemiBold" }}>Take Photo</Text>
+                    <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 1 }}>Use camera to click a new photo</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={pickFromGallery}
+                  activeOpacity={0.7}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: colors.card, borderRadius: 14, paddingHorizontal: 18, paddingVertical: 16, borderWidth: 1, borderColor: colors.border }}
+                >
+                  <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: "#8b5cf618", alignItems: "center", justifyContent: "center" }}>
+                    <Ionicons name="images-outline" size={20} color="#8b5cf6" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: "600", color: colors.foreground, fontFamily: "Inter_600SemiBold" }}>Choose from Gallery</Text>
+                    <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 1 }}>Pick an existing photo</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+                </TouchableOpacity>
+
+                {avatarUri && (
+                  <TouchableOpacity
+                    onPress={removePhoto}
+                    activeOpacity={0.7}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#ef444410", borderRadius: 14, paddingHorizontal: 18, paddingVertical: 16, borderWidth: 1, borderColor: "#ef444425" }}
+                  >
+                    <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: "#ef444420", alignItems: "center", justifyContent: "center" }}>
+                      <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 15, fontWeight: "600", color: "#ef4444", fontFamily: "Inter_600SemiBold" }}>Remove Photo</Text>
+                      <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 1 }}>Revert to initials avatar</Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  onPress={() => setShowPhotoPicker(false)}
+                  activeOpacity={0.7}
+                  style={{ backgroundColor: colors.background, borderRadius: 14, paddingVertical: 15, alignItems: "center", borderWidth: 1, borderColor: colors.border }}
+                >
+                  <Text style={{ fontSize: 15, fontWeight: "600", color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── Custom Logout Confirmation Modal ── */}
+      <Modal visible={showLogout} transparent animationType="fade" onRequestClose={() => setShowLogout(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", padding: 24 }} onPress={() => setShowLogout(false)}>
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 24, width: "100%", borderWidth: 1, borderColor: colors.border }}>
+              {/* Icon */}
+              <View style={{ width: 60, height: 60, borderRadius: 18, backgroundColor: "#ef444415", alignItems: "center", justifyContent: "center", alignSelf: "center", marginBottom: 16 }}>
+                <Ionicons name="log-out-outline" size={28} color="#ef4444" />
+              </View>
+
+              <Text style={{ fontSize: 20, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold", textAlign: "center", marginBottom: 8 }}>Log Out?</Text>
+              <Text style={{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20, marginBottom: 24 }}>
+                You will be logged out of your Preeku account. Your data will remain safe.
+              </Text>
+
+              <View style={{ gap: 10 }}>
+                <TouchableOpacity
+                  onPress={async () => {
+                    setShowLogout(false);
+                    await logout();
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  }}
+                  activeOpacity={0.8}
+                  style={{ backgroundColor: "#ef4444", borderRadius: 14, paddingVertical: 14, alignItems: "center" }}
+                >
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#fff", fontFamily: "Inter_700Bold" }}>Yes, Log Out</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setShowLogout(false)}
+                  activeOpacity={0.7}
+                  style={{ backgroundColor: colors.background, borderRadius: 14, paddingVertical: 14, alignItems: "center", borderWidth: 1, borderColor: colors.border }}
+                >
+                  <Text style={{ fontSize: 15, fontWeight: "600", color: colors.foreground, fontFamily: "Inter_600SemiBold" }}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={{ fontSize: 11, color: colors.mutedForeground, textAlign: "center", marginTop: 14, fontFamily: "Inter_400Regular" }}>
+                Preeku Version 1.1.0
+              </Text>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
