@@ -1,36 +1,68 @@
 import { useState } from "react";
 
+const LOGO_SOURCES = (symbol: string) => [
+  `https://assets.smallcase.com/images/smallplains/200x200/${symbol}.png`,
+  `https://kite.zerodha.com/static/images/instrument_logos/${symbol}.png`,
+  `https://storage.googleapis.com/kite-public/logos/${symbol}.png`,
+];
+
 interface StockLogoProps {
   symbol: string;
   size?: number;
   className?: string;
 }
 
-export default function StockLogo({ symbol, size = 32, className = "" }: StockLogoProps) {
-  const [failed, setFailed] = useState(false);
-  const logoUrl = `https://assets.smallcase.com/images/smallplains/200x200/${symbol}.png`;
+function getAvatarColors(symbol: string) {
+  const hue = (symbol.charCodeAt(0) * 47 + (symbol.charCodeAt(1) ?? 0) * 23) % 360;
+  return {
+    bg: `hsl(${hue},50%,22%)`,
+    fg: `hsl(${hue},65%,70%)`,
+  };
+}
 
-  if (!failed) {
+export default function StockLogo({ symbol, size = 32, className = "" }: StockLogoProps) {
+  const sources = LOGO_SOURCES(symbol);
+  const [sourceIndex, setSourceIndex] = useState(0);
+
+  if (sourceIndex < sources.length) {
     return (
       <img
-        src={logoUrl}
+        key={sources[sourceIndex]}
+        src={sources[sourceIndex]}
         alt={symbol}
         width={size}
         height={size}
-        style={{ width: size, height: size, borderRadius: 8, objectFit: "contain", background: "transparent" }}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: 8,
+          objectFit: "contain",
+          background: "transparent",
+          flexShrink: 0,
+        }}
         className={className}
-        onError={() => setFailed(true)}
+        onError={() => setSourceIndex((i) => i + 1)}
       />
     );
   }
 
+  const { bg, fg } = getAvatarColors(symbol);
   return (
     <div
-      style={{ width: size, height: size, borderRadius: 8 }}
-      className={`bg-primary/10 flex items-center justify-center flex-shrink-0 ${className}`}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: 8,
+        background: bg,
+        flexShrink: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+      className={className}
     >
-      <span className="text-primary font-bold" style={{ fontSize: size * 0.32 }}>
-        {symbol.slice(0, 2)}
+      <span style={{ color: fg, fontWeight: 700, fontSize: size * 0.32, letterSpacing: -0.5 }}>
+        {symbol.slice(0, 2).toUpperCase()}
       </span>
     </div>
   );
