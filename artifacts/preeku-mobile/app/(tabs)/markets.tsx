@@ -1,16 +1,18 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View, Text, FlatList, TextInput,
-  TouchableOpacity, Platform, RefreshControl,
+  TouchableOpacity, Platform, RefreshControl, ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useListStocks, getListStocksQueryKey } from "@workspace/api-client-react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { useColors } from "@/hooks/useColors";
 import { useTradingContext } from "@/context/TradingContext";
 import { FlashingPrice } from "@/components/FlashingPrice";
 import { useLivePrices, useLivePrice } from "@/context/LivePricesContext";
+
+const PAGE_SIZE = 100;
 
 interface Stock {
   symbol: string; name: string; exchange: string; sector: string;
@@ -33,18 +35,13 @@ function StockRow({ item, onPress, onBuy, onSell, colors }: {
       onPress={onPress}
       style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: 1, borderColor: colors.border }}
     >
-      {/* Avatar */}
       <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: colors.primary + "18", alignItems: "center", justifyContent: "center", marginRight: 12 }}>
         <Text style={{ color: colors.primary, fontSize: 13, fontWeight: "700", fontFamily: "Inter_700Bold" }}>{item.symbol.slice(0, 2)}</Text>
       </View>
-
-      {/* Name + sector */}
       <View style={{ flex: 1 }}>
         <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" }}>{item.symbol}</Text>
-        <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 1 }} numberOfLines={1}>{item.sector}</Text>
+        <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 1 }} numberOfLines={1}>{item.name.split(" ").slice(0, 3).join(" ")}</Text>
       </View>
-
-      {/* Live price + change */}
       <View style={{ alignItems: "flex-end", marginRight: 10 }}>
         <FlashingPrice
           value={price}
@@ -58,8 +55,6 @@ function StockRow({ item, onPress, onBuy, onSell, colors }: {
           </Text>
         </View>
       </View>
-
-      {/* Buy / Sell quick buttons */}
       <View style={{ gap: 5 }}>
         <TouchableOpacity
           style={{ backgroundColor: colors.gainBg, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: colors.gain + "40" }}
@@ -80,6 +75,14 @@ function StockRow({ item, onPress, onBuy, onSell, colors }: {
   );
 }
 
+function buildApiUrl(search: string, offset: number) {
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  const base = domain ? `https://${domain}` : "http://localhost:8080";
+  const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
+  if (search.trim()) params.set("search", search.trim());
+  return `${base}/api/stocks?${params}`;
+}
+
 export default function MarketsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -87,24 +90,54 @@ export default function MarketsScreen() {
   const { openOrderModal } = useTradingContext();
   const { connected, prices } = useLivePrices();
   const [search, setSearch] = useState("");
-  const params = search.trim() ? { search: search.trim() } : undefined;
-  const { data: stocks, isLoading, refetch } = useListStocks(params, {
-    query: {
-      queryKey: getListStocksQueryKey(params),
-      refetchInterval: 15000,
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  const searchTimeout = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleSearch = (text: string) => {
+    setSearch(text);
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    searchTimeout.current = setTimeout(() => setDebouncedSearch(text), 350);
+  };
+
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    refetch,
+    isFetching,
+  } = useInfiniteQuery<Stock[]>({
+    queryKey: ["stocks-infinite", debouncedSearch],
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) => {
+      const res = await fetch(buildApiUrl(debouncedSearch, pageParam as number));
+      return res.json();
     },
+    getNextPageParam: (lastPage, allPages) => {
+      if (!Array.isArray(lastPage) || lastPage.length < PAGE_SIZE) return undefined;
+      return allPages.reduce((sum, p) => sum + p.length, 0);
+    },
+    staleTime: 60000,
   });
 
+  const stockList: Stock[] = data?.pages.flat() ?? [];
+  const gainers = stockList.filter((s) => (prices[s.symbol]?.changePercent ?? s.changePercent) >= 0).length;
+  const losers = stockList.length - gainers;
   const topInset = Platform.OS === "web" ? 67 : insets.top;
-  const stockList: Stock[] = Array.isArray(stocks) ? stocks : [];
-  const gainers = stockList.filter((s) => s.changePercent >= 0).length;
-  const losers = stockList.filter((s) => s.changePercent < 0).length;
+
+  const onEndReached = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
       <View style={{ paddingTop: topInset + 12, paddingHorizontal: 20, paddingBottom: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <Text style={{ fontSize: 22, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" }}>Markets</Text>
+        <View>
+          <Text style={{ fontSize: 22, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" }}>Markets</Text>
+          {!isLoading && <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>{stockList.length}+ stocks loaded</Text>}
+        </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: connected ? colors.gain + "18" : colors.border, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: connected ? colors.gain + "44" : colors.border }}>
           <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: connected ? colors.gain : colors.mutedForeground }} />
           <Text style={{ fontSize: 11, fontFamily: "Inter_500Medium", fontWeight: "500", color: connected ? colors.gain : colors.mutedForeground }}>
@@ -118,14 +151,14 @@ export default function MarketsScreen() {
         <Ionicons name="search" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
         <TextInput
           style={{ flex: 1, height: 42, color: colors.foreground, fontSize: 14, fontFamily: "Inter_400Regular" }}
-          placeholder="Search stocks..."
+          placeholder="Search 2,200+ NSE stocks..."
           placeholderTextColor={colors.mutedForeground}
           value={search}
-          onChangeText={setSearch}
+          onChangeText={handleSearch}
           autoCapitalize="characters"
         />
         {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch("")}>
+          <TouchableOpacity onPress={() => { setSearch(""); setDebouncedSearch(""); }}>
             <Ionicons name="close-circle" size={18} color={colors.mutedForeground} />
           </TouchableOpacity>
         )}
@@ -133,36 +166,29 @@ export default function MarketsScreen() {
 
       {/* Stats chips */}
       <View style={{ flexDirection: "row", gap: 8, marginHorizontal: 16, marginBottom: 12 }}>
-        <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.card, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: colors.gain + "40" }}>
-          <Ionicons name="trending-up" size={16} color={colors.gain} />
-          <View>
-            <Text style={{ fontSize: 13, fontWeight: "700", fontFamily: "Inter_700Bold", color: colors.gain }}>{gainers}</Text>
-            <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>Gainers</Text>
+        {[
+          { label: "Gainers", value: gainers, color: colors.gain, bg: colors.gainBg, icon: "trending-up" as const },
+          { label: "Losers", value: losers, color: colors.loss, bg: colors.lossBg, icon: "trending-down" as const },
+          { label: "Loaded", value: stockList.length, color: colors.primary, bg: colors.primary + "18", icon: "stats-chart" as const },
+        ].map(({ label, value, color, bg, icon }) => (
+          <View key={label} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.card, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: color + "40" }}>
+            <Ionicons name={icon} size={16} color={color} />
+            <View>
+              <Text style={{ fontSize: 13, fontWeight: "700", fontFamily: "Inter_700Bold", color }}>{value}</Text>
+              <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>{label}</Text>
+            </View>
           </View>
-        </View>
-        <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.card, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: colors.loss + "40" }}>
-          <Ionicons name="trending-down" size={16} color={colors.loss} />
-          <View>
-            <Text style={{ fontSize: 13, fontWeight: "700", fontFamily: "Inter_700Bold", color: colors.loss }}>{losers}</Text>
-            <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>Losers</Text>
-          </View>
-        </View>
-        <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.card, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: colors.border }}>
-          <Ionicons name="stats-chart" size={16} color={colors.primary} />
-          <View>
-            <Text style={{ fontSize: 13, fontWeight: "700", fontFamily: "Inter_700Bold", color: colors.primary }}>{stockList.length}</Text>
-            <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>Total</Text>
-          </View>
-        </View>
+        ))}
       </View>
 
       <FlatList
         data={stockList}
         extraData={prices}
         keyExtractor={(item) => item.symbol}
-        scrollEnabled={stockList.length > 0}
-        refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.primary} />}
-        contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 100 : 100 }}
+        refreshControl={<RefreshControl refreshing={isFetching && !isFetchingNextPage} onRefresh={refetch} tintColor={colors.primary} />}
+        contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 120 : 120 }}
+        onEndReached={onEndReached}
+        onEndReachedThreshold={0.3}
         renderItem={({ item }) => (
           <StockRow
             item={item}
@@ -172,16 +198,38 @@ export default function MarketsScreen() {
             onSell={() => openOrderModal({ symbol: item.symbol, name: item.name, currentPrice: item.currentPrice }, "SELL")}
           />
         )}
+        ListFooterComponent={
+          isFetchingNextPage ? (
+            <View style={{ padding: 20, alignItems: "center" }}>
+              <ActivityIndicator color={colors.primary} />
+              <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 6, fontFamily: "Inter_400Regular" }}>Loading more stocks...</Text>
+            </View>
+          ) : hasNextPage ? (
+            <TouchableOpacity
+              style={{ margin: 16, backgroundColor: colors.card, borderRadius: 12, padding: 14, alignItems: "center", borderWidth: 1, borderColor: colors.border }}
+              onPress={() => fetchNextPage()}
+            >
+              <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Load More Stocks</Text>
+            </TouchableOpacity>
+          ) : stockList.length > 0 ? (
+            <Text style={{ textAlign: "center", color: colors.mutedForeground, padding: 20, fontFamily: "Inter_400Regular", fontSize: 12 }}>
+              All {stockList.length} stocks loaded
+            </Text>
+          ) : null
+        }
         ListEmptyComponent={
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 40, gap: 8 }}>
-            <Ionicons name="bar-chart-outline" size={48} color={colors.mutedForeground} />
-            <Text style={{ fontSize: 15, color: colors.foreground, fontFamily: "Inter_600SemiBold", fontWeight: "600" }}>
-              {isLoading ? "Loading stocks..." : "No stocks found"}
-            </Text>
-            <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_400Regular", textAlign: "center" }}>
-              {!isLoading && search ? `No results for "${search}"` : ""}
-            </Text>
-          </View>
+          isLoading ? (
+            <View style={{ padding: 40, alignItems: "center", gap: 12 }}>
+              <ActivityIndicator color={colors.primary} size="large" />
+              <Text style={{ fontSize: 15, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>Loading stocks...</Text>
+            </View>
+          ) : (
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 40, gap: 8 }}>
+              <Ionicons name="bar-chart-outline" size={48} color={colors.mutedForeground} />
+              <Text style={{ fontSize: 15, color: colors.foreground, fontFamily: "Inter_600SemiBold", fontWeight: "600" }}>No stocks found</Text>
+              {search ? <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_400Regular", textAlign: "center" }}>No results for "{search}"</Text> : null}
+            </View>
+          )
         }
       />
     </View>

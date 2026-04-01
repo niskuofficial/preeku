@@ -1,39 +1,44 @@
 import { Router, type IRouter } from "express";
 import { db, stocksTable } from "@workspace/db";
-import { eq, ilike, or, sql } from "drizzle-orm";
+import { desc, eq, ilike, or, sql } from "drizzle-orm";
 import { getMarketQuotes } from "../angel/client";
 
 const router: IRouter = Router();
 
+function mapStock(s: typeof stocksTable.$inferSelect) {
+  const cur = parseFloat(s.currentPrice);
+  const prev = parseFloat(s.previousClose);
+  return {
+    symbol: s.symbol,
+    name: s.name,
+    exchange: s.exchange,
+    sector: s.sector,
+    currentPrice: cur,
+    previousClose: prev,
+    change: prev > 0 ? cur - prev : 0,
+    changePercent: prev > 0 ? ((cur - prev) / prev) * 100 : 0,
+    high: parseFloat(s.high),
+    low: parseFloat(s.low),
+    volume: s.volume,
+    marketCap: parseFloat(s.marketCap),
+  };
+}
+
 router.get("/stocks", async (req, res) => {
   try {
-    const search = req.query.search as string | undefined;
-    let stocks;
-    if (search && search.trim()) {
-      stocks = await db.select().from(stocksTable).where(
-        or(
-          ilike(stocksTable.symbol, `%${search}%`),
-          ilike(stocksTable.name, `%${search}%`)
-        )
-      );
-    } else {
-      stocks = await db.select().from(stocksTable);
-    }
+    const search = (req.query.search as string | undefined)?.trim();
+    const limit = Math.min(parseInt(req.query.limit as string || "100", 10), 500);
+    const offset = parseInt(req.query.offset as string || "0", 10);
+    const whereClause = search ? or(ilike(stocksTable.symbol, `%${search}%`), ilike(stocksTable.name, `%${search}%`)) : undefined;
 
-    res.json(stocks.map((s) => ({
-      symbol: s.symbol,
-      name: s.name,
-      exchange: s.exchange,
-      sector: s.sector,
-      currentPrice: parseFloat(s.currentPrice),
-      previousClose: parseFloat(s.previousClose),
-      change: parseFloat(s.currentPrice) - parseFloat(s.previousClose),
-      changePercent: ((parseFloat(s.currentPrice) - parseFloat(s.previousClose)) / parseFloat(s.previousClose)) * 100,
-      high: parseFloat(s.high),
-      low: parseFloat(s.low),
-      volume: s.volume,
-      marketCap: parseFloat(s.marketCap),
-    })));
+    const [stocks, [{ total }]] = await Promise.all([
+      db.select().from(stocksTable).where(whereClause).orderBy(desc(stocksTable.marketCap)).limit(limit).offset(offset),
+      db.select({ total: sql<number>`count(*)::int` }).from(stocksTable).where(whereClause),
+    ]);
+
+    res.setHeader("X-Total-Count", String(total));
+    res.setHeader("X-Has-More", String(offset + stocks.length < total));
+    res.json(stocks.map(mapStock));
   } catch (err) {
     req.log.error({ err }, "Error fetching stocks");
     res.status(500).json({ error: "Internal server error" });
