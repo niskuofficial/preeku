@@ -26,6 +26,7 @@ async function fetchStocks(search: string, offset: number, limit: number): Promi
 export default function Markets() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [activeFilter, setActiveFilter] = useState<"gainers" | "losers" | null>(null);
   const { openOrderWindow } = useTradingContext();
   const { prices } = useLivePrices();
   const { isOpen: marketOpen, label: marketLabel } = useMarketStatus();
@@ -56,8 +57,16 @@ export default function Markets() {
 
   const stockList: Stock[] = data?.pages.flat() ?? [];
 
-  const gainers = stockList.filter((s) => (prices[s.symbol]?.changePercent ?? s.changePercent) >= 0).length;
-  const losers = stockList.length - gainers;
+  const gainers = stockList.filter((s) => (prices[s.symbol]?.changePercent ?? s.changePercent) > 0).length;
+  const losers = stockList.filter((s) => (prices[s.symbol]?.changePercent ?? s.changePercent) < 0).length;
+
+  const filteredList = activeFilter === "gainers"
+    ? stockList.filter((s) => (prices[s.symbol]?.changePercent ?? s.changePercent) > 0)
+    : activeFilter === "losers"
+    ? stockList.filter((s) => (prices[s.symbol]?.changePercent ?? s.changePercent) < 0)
+    : stockList;
+
+  const toggleFilter = (f: "gainers" | "losers") => setActiveFilter((prev) => (prev === f ? null : f));
 
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-5">
@@ -90,15 +99,38 @@ export default function Markets() {
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        {[
-          { label: "Gainers", count: gainers, color: "text-green-400" },
-          { label: "Losers", count: losers, color: "text-red-400" },
-        ].map(({ label, count, color }) => (
-          <div key={label} className="bg-card border border-border rounded-lg p-3 text-center">
-            <div className={`text-xl font-bold font-mono ${color}`}>{count}</div>
-            <div className="text-xs text-muted-foreground">{label}</div>
+        <button
+          onClick={() => toggleFilter("gainers")}
+          className={`rounded-lg p-3 text-center border transition-all ${
+            activeFilter === "gainers"
+              ? "bg-green-500/15 border-green-500/50 ring-1 ring-green-500/40"
+              : "bg-card border-border hover:border-green-500/40 hover:bg-green-500/5"
+          }`}
+        >
+          <div className="flex items-center justify-center gap-1.5 mb-0.5">
+            <TrendingUp className="w-4 h-4 text-green-400" />
+            <span className="text-xl font-bold font-mono text-green-400">{gainers}</span>
           </div>
-        ))}
+          <div className={`text-xs font-medium ${activeFilter === "gainers" ? "text-green-400" : "text-muted-foreground"}`}>
+            {activeFilter === "gainers" ? "✓ Gainers" : "Gainers"}
+          </div>
+        </button>
+        <button
+          onClick={() => toggleFilter("losers")}
+          className={`rounded-lg p-3 text-center border transition-all ${
+            activeFilter === "losers"
+              ? "bg-red-500/15 border-red-500/50 ring-1 ring-red-500/40"
+              : "bg-card border-border hover:border-red-500/40 hover:bg-red-500/5"
+          }`}
+        >
+          <div className="flex items-center justify-center gap-1.5 mb-0.5">
+            <TrendingDown className="w-4 h-4 text-red-400" />
+            <span className="text-xl font-bold font-mono text-red-400">{losers}</span>
+          </div>
+          <div className={`text-xs font-medium ${activeFilter === "losers" ? "text-red-400" : "text-muted-foreground"}`}>
+            {activeFilter === "losers" ? "✓ Losers" : "Losers"}
+          </div>
+        </button>
       </div>
 
       <div className="bg-card border border-border rounded-xl overflow-hidden">
@@ -113,7 +145,7 @@ export default function Markets() {
             </tr>
           </thead>
           <tbody>
-            {stockList.map((stock) => {
+            {filteredList.map((stock) => {
               const live = prices[stock.symbol];
               const ltp = live?.ltp ?? stock.currentPrice;
               const chg = live?.change ?? stock.change;
@@ -163,6 +195,15 @@ export default function Markets() {
               );
             })}
 
+            {!isLoading && filteredList.length === 0 && stockList.length > 0 && (
+              <tr>
+                <td colSpan={8} className="py-10 text-center text-muted-foreground text-sm">
+                  No {activeFilter === "gainers" ? "gainers" : "losers"} found in loaded stocks.{" "}
+                  <button onClick={() => setActiveFilter(null)} className="text-primary underline underline-offset-2 hover:no-underline">Clear filter</button>
+                </td>
+              </tr>
+            )}
+
             {isLoading && Array.from({ length: 8 }).map((_, i) => (
               <tr key={`skel-${i}`} className="border-b border-border/50 animate-pulse">
                 {Array.from({ length: 8 }).map((__, j) => (
@@ -188,7 +229,11 @@ export default function Markets() {
               Load More
             </button>
           ) : stockList.length > 0 && !isLoading ? (
-            <p className="text-muted-foreground text-xs">All {stockList.length} stocks loaded</p>
+            <p className="text-muted-foreground text-xs">
+              {activeFilter
+                ? `${filteredList.length} ${activeFilter} of ${stockList.length} loaded stocks`
+                : `All ${stockList.length} stocks loaded`}
+            </p>
           ) : null}
         </div>
       </div>
