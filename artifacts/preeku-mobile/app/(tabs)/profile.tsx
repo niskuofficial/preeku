@@ -420,6 +420,51 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Logout Button */}
+        <View style={{ marginHorizontal: 16, marginBottom: 16 }}>
+          <TouchableOpacity
+            onPress={() => {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+              Alert.alert(
+                "Log Out",
+                "Are you sure you want to log out?",
+                [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Log Out",
+                    style: "destructive",
+                    onPress: async () => {
+                      await AsyncStorage.multiRemove(["preeku_name", "preeku_email", "preeku_avatar"]);
+                      setName("Trader");
+                      setEmail("trader@preeku.in");
+                      setAvatarUri(null);
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                      Alert.alert("Logged Out", "You have been logged out successfully.");
+                    },
+                  },
+                ]
+              );
+            }}
+            activeOpacity={0.8}
+            style={{
+              flexDirection: "row" as const,
+              alignItems: "center" as const,
+              justifyContent: "center" as const,
+              gap: 10,
+              backgroundColor: colors.loss + "15",
+              borderWidth: 1,
+              borderColor: colors.loss + "40",
+              borderRadius: 14,
+              paddingVertical: 15,
+            }}
+          >
+            <Ionicons name="log-out-outline" size={20} color={colors.loss} />
+            <Text style={{ fontSize: 15, fontWeight: "600" as const, color: colors.loss, fontFamily: "Inter_600SemiBold" }}>
+              Log Out
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         <Text style={{ textAlign: "center" as const, color: colors.mutedForeground, fontSize: 12, fontFamily: "Inter_400Regular", paddingBottom: 8 }}>
           Preeku Trading v1.0 
         </Text>
