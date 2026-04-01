@@ -90,6 +90,38 @@ router.get("/admin/me", requireAdmin, async (req, res) => {
   res.json({ isAdmin: true });
 });
 
+router.patch("/admin/users/:clerkId/password", requireAdmin, async (req, res) => {
+  try {
+    const { clerkId } = req.params;
+    const { password } = req.body;
+    if (!password || typeof password !== "string" || password.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters." });
+    }
+    const clerkSecret = process.env.CLERK_SECRET_KEY;
+    if (!clerkSecret) return res.status(500).json({ error: "Clerk not configured." });
+
+    const clerkRes = await fetch(`https://api.clerk.com/v1/users/${clerkId}`, {
+      method: "PATCH",
+      headers: {
+        "Authorization": `Bearer ${clerkSecret}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ password, skip_password_checks: true }),
+    });
+
+    if (!clerkRes.ok) {
+      const err = await clerkRes.json();
+      return res.status(400).json({ error: err?.errors?.[0]?.message || "Failed to update password." });
+    }
+
+    req.log.info({ clerkId }, "Admin: Password changed for user");
+    res.json({ success: true, message: "Password updated successfully." });
+  } catch (err) {
+    req.log.error({ err }, "Admin: Error changing password");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // Bootstrap: first signed-in user can claim admin if NO admins exist yet
 router.post("/admin/bootstrap", requireAuth, async (req, res) => {
   const userId = (req as any).userId;

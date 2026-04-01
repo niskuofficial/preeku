@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Shield, Users, Wallet, Ban, CheckCircle, Crown, Search } from "lucide-react";
+import { Shield, Users, Wallet, Ban, CheckCircle, Crown, Search, KeyRound, Eye, EyeOff, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getBaseUrl } from "@/lib/api";
 
@@ -27,6 +27,9 @@ export default function Admin() {
   const [search, setSearch] = useState("");
   const [editingWallet, setEditingWallet] = useState<{ clerkId: string; balance: number } | null>(null);
   const [walletInput, setWalletInput] = useState("");
+  const [passwordModal, setPasswordModal] = useState<{ clerkId: string; name: string; email: string } | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const { data: users = [], isLoading, error } = useQuery<AdminUser[]>({
     queryKey: ["admin-users"],
@@ -99,6 +102,26 @@ export default function Admin() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-users"] });
       toast({ title: "Admin status updated" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const passwordMutation = useMutation({
+    mutationFn: async ({ clerkId, password }: { clerkId: string; password: string }) => {
+      const res = await fetch(`${getBaseUrl()}/api/admin/users/${clerkId}/password`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Failed"); }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Password updated successfully" });
+      setPasswordModal(null);
+      setNewPassword("");
+      setShowPassword(false);
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -264,6 +287,13 @@ export default function Admin() {
                         >
                           <Crown className="w-3.5 h-3.5" />
                         </button>
+                        <button
+                          onClick={() => { setPasswordModal({ clerkId: user.clerkId, name: user.name || user.email, email: user.email }); setNewPassword(""); setShowPassword(false); }}
+                          title="Change password"
+                          className="p-1.5 rounded-lg transition-colors bg-blue-500/10 text-blue-400 hover:bg-blue-500/20"
+                        >
+                          <KeyRound className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -273,6 +303,81 @@ export default function Admin() {
           </div>
         </div>
       </div>
+
+      {/* Password Change Modal */}
+      {passwordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.7)" }}>
+          <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-blue-500/10 rounded-xl">
+                  <KeyRound className="w-5 h-5 text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-foreground">Change Password</h3>
+                  <p className="text-xs text-muted-foreground">{passwordModal.name} · {passwordModal.email}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setPasswordModal(null); setNewPassword(""); setShowPassword(false); }}
+                className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Password Input */}
+            <div className="mb-5">
+              <label className="block text-xs font-medium text-muted-foreground mb-2">New Password</label>
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  placeholder="Min. 8 characters"
+                  autoFocus
+                  className="w-full bg-background border border-border rounded-xl px-4 py-3 pr-11 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                  onKeyDown={e => { if (e.key === "Enter" && newPassword.length >= 8) passwordMutation.mutate({ clerkId: passwordModal.clerkId, password: newPassword }); }}
+                />
+                <button
+                  onClick={() => setShowPassword(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {newPassword.length > 0 && newPassword.length < 8 && (
+                <p className="text-xs text-red-400 mt-1.5">Password must be at least 8 characters</p>
+              )}
+            </div>
+
+            {/* Strength indicator */}
+            {newPassword.length >= 8 && (
+              <div className="mb-5 p-3 bg-green-500/10 border border-green-500/20 rounded-xl">
+                <p className="text-xs text-green-400 font-medium">✓ Password length is good</p>
+              </div>
+            )}
+
+            {/* Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setPasswordModal(null); setNewPassword(""); setShowPassword(false); }}
+                className="flex-1 bg-background border border-border text-foreground rounded-xl py-2.5 text-sm font-medium hover:bg-accent transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => passwordMutation.mutate({ clerkId: passwordModal.clerkId, password: newPassword })}
+                disabled={newPassword.length < 8 || passwordMutation.isPending}
+                className="flex-1 bg-blue-500 text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {passwordMutation.isPending ? "Updating…" : "Update Password"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
