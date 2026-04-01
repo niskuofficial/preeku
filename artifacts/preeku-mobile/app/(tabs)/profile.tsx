@@ -58,6 +58,7 @@ export default function ProfileScreen() {
   const [tempName, setTempName] = useState("");
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
+  const [addingBalance, setAddingBalance] = useState(false);
 
   const { data: summary } = useGetPortfolioSummary();
   const { data: wallet } = useGetWallet();
@@ -107,6 +108,40 @@ export default function ProfileScreen() {
     } finally {
       setResetting(false);
     }
+  };
+
+  const handleAddBalance = (amount: number) => {
+    Alert.alert(
+      "Add Funds",
+      `Add ₹${amount.toLocaleString("en-IN")} to your wallet?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Add",
+          onPress: async () => {
+            setAddingBalance(true);
+            try {
+              const domain = process.env.EXPO_PUBLIC_DOMAIN;
+              const baseUrl = domain ? `https://${domain}` : "http://localhost:8080";
+              const res = await fetch(`${baseUrl}/api/wallet/add-balance`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ amount }),
+              });
+              if (!res.ok) throw new Error("Failed");
+              await queryClient.invalidateQueries({ queryKey: getGetWalletQueryKey() });
+              await queryClient.invalidateQueries({ queryKey: getGetPortfolioSummaryQueryKey() });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            } catch {
+              Alert.alert("Error", "Could not add funds. Try again.");
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            } finally {
+              setAddingBalance(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const pickAvatar = () => {
@@ -244,10 +279,39 @@ export default function ProfileScreen() {
         {/* Trading Stats */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>TRADING STATS</Text>
-          <View style={styles.statsRow}>
-            <StatCard icon="trending-up" label="Total P&L" value={formatINR(s?.totalPnl ?? 0)} color={(s?.totalPnl ?? 0) >= 0 ? colors.gain : colors.loss} colors={colors} />
-            <StatCard icon="wallet" label="Balance" value={formatINR(walletBalance)} color={colors.primary} colors={colors} />
+
+          {/* Wallet Balance Card — full width */}
+          <View style={{ backgroundColor: colors.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.border, marginBottom: 10 }}>
+            <View style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, marginBottom: 10 }}>
+              <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 8 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.primary + "20", alignItems: "center" as const, justifyContent: "center" as const }}>
+                  <Ionicons name="wallet" size={18} color={colors.primary} />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>Wallet Balance</Text>
+                  <Text style={{ fontSize: 20, fontWeight: "700" as const, color: colors.foreground, fontFamily: "Inter_700Bold" }}>
+                    {new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(walletBalance)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+            <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginBottom: 8 }}>Add funds to your wallet</Text>
+            <View style={{ flexDirection: "row" as const, gap: 8 }}>
+              {[50000, 100000, 200000, 500000].map((amt) => (
+                <TouchableOpacity
+                  key={amt}
+                  onPress={() => { Haptics.selectionAsync(); handleAddBalance(amt); }}
+                  disabled={addingBalance}
+                  style={{ flex: 1, backgroundColor: colors.primary + "15", borderRadius: 8, paddingVertical: 7, borderWidth: 1, borderColor: colors.primary + "30", alignItems: "center" as const }}
+                >
+                  <Text style={{ color: colors.primary, fontSize: 11, fontWeight: "600" as const, fontFamily: "Inter_600SemiBold" }}>
+                    +{amt >= 100000 ? (amt / 100000) + "L" : (amt / 1000) + "K"}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
+
           <View style={styles.statsRow}>
             <StatCard icon="receipt" label="Total Orders" value={String(orderList.length)} color="#f59e0b" colors={colors} />
             <StatCard icon="trophy" label="Win Rate" value={`${winRate}%`} color={winRate >= 50 ? colors.gain : colors.loss} colors={colors} />

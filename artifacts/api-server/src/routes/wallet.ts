@@ -48,6 +48,26 @@ router.get("/wallet", async (req, res) => {
   }
 });
 
+router.post("/wallet/add-balance", async (req, res) => {
+  try {
+    const amount = parseFloat(req.body.amount);
+    if (isNaN(amount) || amount <= 0 || amount > 10000000) {
+      res.status(400).json({ error: "Invalid amount. Must be between ₹1 and ₹1,00,00,000." });
+      return;
+    }
+    let [wallet] = await db.select().from(walletTable).limit(1);
+    if (!wallet) {
+      [wallet] = await db.insert(walletTable).values({ balance: "1000000", initialBalance: "1000000" }).returning();
+    }
+    const newBalance = parseFloat(wallet.balance) + amount;
+    await db.update(walletTable).set({ balance: String(newBalance), updatedAt: new Date() }).where(eq(walletTable.id, wallet.id));
+    res.json({ success: true, balance: newBalance });
+  } catch (err) {
+    req.log.error({ err }, "Error adding balance");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.post("/account/reset", async (req, res) => {
   try {
     await db.delete(ordersTable);
