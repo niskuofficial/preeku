@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Platform, TextInput, Alert, Image,
+  Platform, TextInput, Alert, Image, Switch,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -15,6 +15,7 @@ import {
   getGetPositionsQueryKey, getGetHoldingsQueryKey, getListOrdersQueryKey,
 } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
+import { useAppTheme } from "@/context/ThemeContext";
 
 function formatINR(n: number) {
   if (Math.abs(n) >= 1e7) return "₹" + (n / 1e7).toFixed(2) + " Cr";
@@ -48,6 +49,8 @@ function StatCard({ icon, label, value, color, colors }: {
 
 export default function ProfileScreen() {
   const colors = useColors();
+  const { resolvedTheme, toggleTheme } = useAppTheme();
+  const isDark = resolvedTheme === "dark";
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === "web" ? 67 : insets.top;
 
@@ -368,6 +371,24 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>SETTINGS</Text>
           <View style={styles.menuCard}>
+            {/* Theme Toggle */}
+            <View style={[styles.menuRow, { borderBottomWidth: 1, borderColor: colors.border }]}>
+              <View style={[styles.menuIcon, { backgroundColor: (isDark ? "#818cf8" : "#f59e0b") + "18" }]}>
+                <Ionicons
+                  name={isDark ? "moon" : "sunny"}
+                  size={20}
+                  color={isDark ? "#818cf8" : "#f59e0b"}
+                />
+              </View>
+              <Text style={styles.menuLabel}>{isDark ? "Dark Mode" : "Light Mode"}</Text>
+              <Switch
+                value={isDark}
+                onValueChange={() => { Haptics.selectionAsync(); toggleTheme(); }}
+                trackColor={{ false: colors.border, true: colors.primary + "80" }}
+                thumbColor={isDark ? colors.primary : "#e5e7eb"}
+              />
+            </View>
+
             {[
               { icon: "notifications-outline", label: "Notifications", color: "#f59e0b", onPress: () => {} },
               { icon: "help-circle-outline", label: "Help & Support", color: colors.primary, onPress: () => {} },
