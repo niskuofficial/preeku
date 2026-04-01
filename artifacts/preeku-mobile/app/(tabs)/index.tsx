@@ -219,6 +219,11 @@ export default function HomeScreen() {
           style={{ width: 36, height: 36, borderRadius: 8 }}
           resizeMode="contain"
         />
+        <View style={{ flex: 1, marginHorizontal: 12 }}>
+          <Text style={{ fontSize: 15, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+            Hello, <Text style={{ color: colors.foreground, fontFamily: "Inter_700Bold", fontWeight: "700" }}>{profileName.split(" ")[0]}</Text> 👋
+          </Text>
+        </View>
         <TouchableOpacity
           onPress={() => router.push("/(tabs)/profile")}
           activeOpacity={0.75}
