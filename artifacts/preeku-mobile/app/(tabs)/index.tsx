@@ -213,7 +213,7 @@ export default function HomeScreen() {
           <Text style={styles.portfolioLabel}>PORTFOLIO VALUE</Text>
           <FlashingPrice
             value={liveStats.currentValue}
-            format={formatINR}
+            format={(v) => "₹" + Math.round(v).toLocaleString("en-IN")}
             style={styles.portfolioValue}
           />
           <View style={styles.pnlRow}>
