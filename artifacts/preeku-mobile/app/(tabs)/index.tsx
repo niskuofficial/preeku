@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useCallback } from "react";
+import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
@@ -123,11 +123,25 @@ export default function HomeScreen() {
     staleTime: 15000,
   });
 
+  const [moversTab, setMoversTab] = useState<"gainers" | "losers">("gainers");
+
   const s = summary as Summary | undefined;
   const watchlistItems: WatchlistItem[] = Array.isArray(watchlist) ? watchlist : [];
   const heatmapData: HeatmapSector[] = Array.isArray(heatmap) ? heatmap : [];
   const positionList: PortfolioPosition[] = Array.isArray(positions) ? positions : [];
   const holdingList: PortfolioHolding[] = Array.isArray(holdings) ? holdings : [];
+
+  const allMovers = heatmapData.flatMap((sec) =>
+    sec.stocks.map((st) => ({
+      symbol: st.symbol,
+      name: st.name,
+      sector: sec.sector,
+      ltp: prices[st.symbol]?.ltp ?? 0,
+      chgPct: prices[st.symbol]?.changePercent ?? st.changePercent,
+    }))
+  );
+  const topGainers = [...allMovers].filter((s) => s.chgPct > 0).sort((a, b) => b.chgPct - a.chgPct).slice(0, 6);
+  const topLosers = [...allMovers].filter((s) => s.chgPct < 0).sort((a, b) => a.chgPct - b.chgPct).slice(0, 6);
 
   const liveStats = useMemo(() => {
     const totalInvested = s?.totalInvested ?? 0;
@@ -218,6 +232,17 @@ export default function HomeScreen() {
     heatSector: { marginBottom: 12 },
     heatSectorLabel: { fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_500Medium", fontWeight: "500" as const, marginBottom: 6 },
     emptyText: { color: colors.mutedForeground, textAlign: "center" as const, paddingVertical: 24, fontFamily: "Inter_400Regular" },
+    moversCard: { backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.border, overflow: "hidden" as const },
+    moversTabs: { flexDirection: "row" as const, borderBottomWidth: 1, borderColor: colors.border },
+    moversTab: { flex: 1, paddingVertical: 12, flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 6 },
+    moversTabText: { fontSize: 13, fontWeight: "700" as const, fontFamily: "Inter_700Bold" },
+    moverRow: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderColor: colors.border + "60" },
+    moverRank: { fontSize: 11, fontWeight: "700" as const, fontFamily: "Inter_700Bold", color: colors.mutedForeground, width: 20 },
+    moverSymbol: { fontSize: 14, fontWeight: "700" as const, fontFamily: "Inter_700Bold", color: colors.foreground },
+    moverSector: { fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground, marginTop: 1 },
+    moverPrice: { fontSize: 14, fontWeight: "600" as const, fontFamily: "Inter_600SemiBold", color: colors.foreground, textAlign: "right" as const },
+    moverChgChip: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, marginTop: 3, alignSelf: "flex-end" as const },
+    moverChgText: { fontSize: 12, fontWeight: "700" as const, fontFamily: "Inter_700Bold" },
   });
 
   return (
@@ -329,6 +354,68 @@ export default function HomeScreen() {
             </View>
           )}
         </View>
+
+        {/* Top Movers */}
+        {heatmapData.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Top Movers</Text>
+            </View>
+            <View style={styles.moversCard}>
+              {/* Tabs */}
+              <View style={styles.moversTabs}>
+                <TouchableOpacity
+                  style={[styles.moversTab, { borderBottomWidth: 2, borderBottomColor: moversTab === "gainers" ? "#22c55e" : "transparent", backgroundColor: moversTab === "gainers" ? "rgba(34,197,94,0.06)" : "transparent" }]}
+                  onPress={() => setMoversTab("gainers")}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="trending-up" size={14} color={moversTab === "gainers" ? "#4ade80" : colors.mutedForeground} />
+                  <Text style={[styles.moversTabText, { color: moversTab === "gainers" ? "#4ade80" : colors.mutedForeground }]}>
+                    Top Gainers
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.moversTab, { borderBottomWidth: 2, borderBottomColor: moversTab === "losers" ? "#ef4444" : "transparent", backgroundColor: moversTab === "losers" ? "rgba(239,68,68,0.06)" : "transparent" }]}
+                  onPress={() => setMoversTab("losers")}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="trending-down" size={14} color={moversTab === "losers" ? "#f87171" : colors.mutedForeground} />
+                  <Text style={[styles.moversTabText, { color: moversTab === "losers" ? "#f87171" : colors.mutedForeground }]}>
+                    Top Losers
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Rows */}
+              {(moversTab === "gainers" ? topGainers : topLosers).map((stock, idx) => {
+                const isGainer = moversTab === "gainers";
+                const color = isGainer ? "#4ade80" : "#f87171";
+                const bgColor = isGainer ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)";
+                return (
+                  <View key={stock.symbol} style={[styles.moverRow, idx === (moversTab === "gainers" ? topGainers : topLosers).length - 1 && { borderBottomWidth: 0 }]}>
+                    <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 10, flex: 1 }}>
+                      <Text style={styles.moverRank}>#{idx + 1}</Text>
+                      <View>
+                        <Text style={styles.moverSymbol}>{stock.symbol}</Text>
+                        <Text style={styles.moverSector}>{stock.sector}</Text>
+                      </View>
+                    </View>
+                    <View style={{ alignItems: "flex-end" as const }}>
+                      <Text style={styles.moverPrice}>
+                        {stock.ltp > 0 ? `₹${stock.ltp.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                      </Text>
+                      <View style={[styles.moverChgChip, { backgroundColor: bgColor }]}>
+                        <Text style={[styles.moverChgText, { color }]}>
+                          {stock.chgPct >= 0 ? "+" : ""}{stock.chgPct.toFixed(2)}%
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
 
         {/* Heatmap */}
         {heatmapData.length > 0 && (
