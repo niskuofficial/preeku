@@ -30,6 +30,8 @@ export default function Admin() {
   const [passwordModal, setPasswordModal] = useState<{ clerkId: string; name: string; email: string } | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [profileModal, setProfileModal] = useState<AdminUser | null>(null);
+  const [addAmount, setAddAmount] = useState("");
 
   const { data: users = [], isLoading, error } = useQuery<AdminUser[]>({
     queryKey: ["admin-users"],
@@ -102,6 +104,28 @@ export default function Admin() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-users"] });
       toast({ title: "Admin status updated" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const addFundsMutation = useMutation({
+    mutationFn: async ({ clerkId, amount }: { clerkId: string; amount: number }) => {
+      const currentUser = users.find(u => u.clerkId === clerkId);
+      const newBalance = (currentUser?.walletBalance ?? 0) + amount;
+      const res = await fetch(`${getBaseUrl()}/api/admin/users/${clerkId}/wallet`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ balance: newBalance }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: (_, { clerkId, amount }) => {
+      qc.invalidateQueries({ queryKey: ["admin-users"] });
+      setProfileModal(prev => prev ? { ...prev, walletBalance: (prev.walletBalance ?? 0) + amount } : prev);
+      setAddAmount("");
+      toast({ title: `₹${amount.toLocaleString("en-IN")} added to wallet` });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -212,18 +236,19 @@ export default function Admin() {
                 ) : filtered.length === 0 ? (
                   <tr><td colSpan={6} className="text-center py-12 text-muted-foreground">No users found</td></tr>
                 ) : filtered.map(user => (
-                  <tr key={user.clerkId} className="border-b border-border/50 hover:bg-accent/30 transition-colors">
+                  <tr key={user.clerkId} className="border-b border-border/50 hover:bg-accent/30 transition-colors cursor-pointer" onClick={() => { setProfileModal(user); setAddAmount(""); }}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
-                          {(user.name || user.email)[0]?.toUpperCase()}
+                          {(user.name || user.email || "?")[0]?.toUpperCase()}
                         </div>
                         <div>
                           <div className="font-medium text-foreground flex items-center gap-1.5">
                             {user.name || "—"}
                             {user.isAdmin && <Crown className="w-3 h-3 text-amber-400" />}
+                            {user.clerkId.startsWith("mobile_") && <span className="text-xs bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded-full font-normal">Mobile</span>}
                           </div>
-                          <div className="text-xs text-muted-foreground">{user.email}</div>
+                          <div className="text-xs text-muted-foreground">{user.email || "No email"}</div>
                         </div>
                       </div>
                     </td>
@@ -271,7 +296,7 @@ export default function Admin() {
                       </span>
                     </td>
 
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center gap-1.5 justify-center">
                         <button
                           onClick={() => blockMutation.mutate({ clerkId: user.clerkId, isBlocked: !user.isBlocked })}
@@ -287,13 +312,15 @@ export default function Admin() {
                         >
                           <Crown className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          onClick={() => { setPasswordModal({ clerkId: user.clerkId, name: user.name || user.email, email: user.email }); setNewPassword(""); setShowPassword(false); }}
-                          title="Change password"
-                          className="p-1.5 rounded-lg transition-colors bg-blue-500/10 text-blue-400 hover:bg-blue-500/20"
-                        >
-                          <KeyRound className="w-3.5 h-3.5" />
-                        </button>
+                        {!user.clerkId.startsWith("mobile_") && (
+                          <button
+                            onClick={() => { setPasswordModal({ clerkId: user.clerkId, name: user.name || user.email, email: user.email }); setNewPassword(""); setShowPassword(false); }}
+                            title="Change password"
+                            className="p-1.5 rounded-lg transition-colors bg-blue-500/10 text-blue-400 hover:bg-blue-500/20"
+                          >
+                            <KeyRound className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -303,6 +330,115 @@ export default function Admin() {
           </div>
         </div>
       </div>
+
+      {/* User Profile Modal */}
+      {profileModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.7)" }}>
+          <div className="bg-card border border-border rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="relative p-6 pb-4" style={{ background: "linear-gradient(135deg, var(--primary) 0%, #d44a1c 100%)" }}>
+              <button
+                onClick={() => setProfileModal(null)}
+                className="absolute top-4 right-4 p-1.5 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center text-2xl font-bold text-white">
+                  {(profileModal.name || profileModal.email || "?")[0]?.toUpperCase()}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-bold text-white">{profileModal.name || "No Name"}</h3>
+                    {profileModal.isAdmin && <Crown className="w-4 h-4 text-amber-300" />}
+                    {profileModal.clerkId.startsWith("mobile_") && (
+                      <span className="text-xs bg-white/20 text-white px-2 py-0.5 rounded-full">Mobile</span>
+                    )}
+                  </div>
+                  <p className="text-sm text-white/70">{profileModal.email || "No email"}</p>
+                  <p className="text-xs text-white/50 mt-0.5">
+                    {profileModal.clerkId.startsWith("mobile_") ? "Mobile User" : "Web User"} · {profileModal.isBlocked ? "Blocked" : "Active"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-5">
+              {/* Stats */}
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: "Orders", value: profileModal.totalOrders },
+                  { label: "Positions", value: profileModal.openPositions },
+                  { label: "Status", value: profileModal.isBlocked ? "Blocked" : "Active" },
+                ].map(({ label, value }) => (
+                  <div key={label} className="bg-background border border-border rounded-xl p-3 text-center">
+                    <div className="text-base font-bold text-foreground">{value}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Wallet */}
+              <div className="bg-background border border-border rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Wallet className="w-4 h-4 text-amber-400" />
+                    <span className="text-sm font-medium text-foreground">Wallet Balance</span>
+                  </div>
+                  <span className="text-lg font-bold text-foreground">
+                    {formatINR(profileModal.walletBalance)}
+                  </span>
+                </div>
+
+                {/* Quick add buttons */}
+                <p className="text-xs text-muted-foreground mb-2">Quick Add Funds</p>
+                <div className="grid grid-cols-4 gap-2 mb-3">
+                  {[10000, 50000, 100000, 500000].map(amt => (
+                    <button
+                      key={amt}
+                      onClick={() => addFundsMutation.mutate({ clerkId: profileModal.clerkId, amount: amt })}
+                      disabled={addFundsMutation.isPending}
+                      className="bg-primary/10 border border-primary/20 text-primary text-xs font-semibold rounded-lg py-2 hover:bg-primary/20 transition-colors disabled:opacity-40"
+                    >
+                      +{amt >= 100000 ? (amt / 100000) + "L" : (amt / 1000) + "K"}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Custom amount */}
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">₹</span>
+                    <input
+                      type="number"
+                      placeholder="Custom amount"
+                      value={addAmount}
+                      onChange={e => setAddAmount(e.target.value)}
+                      className="w-full bg-card border border-border rounded-xl pl-7 pr-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      onKeyDown={e => { if (e.key === "Enter" && parseFloat(addAmount) > 0) addFundsMutation.mutate({ clerkId: profileModal.clerkId, amount: parseFloat(addAmount) }); }}
+                    />
+                  </div>
+                  <button
+                    onClick={() => { const amt = parseFloat(addAmount); if (amt > 0) addFundsMutation.mutate({ clerkId: profileModal.clerkId, amount: amt }); }}
+                    disabled={!addAmount || parseFloat(addAmount) <= 0 || addFundsMutation.isPending}
+                    className="bg-primary text-white rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-primary/90 disabled:opacity-40 transition-colors"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              {/* Close */}
+              <button
+                onClick={() => setProfileModal(null)}
+                className="w-full bg-background border border-border text-foreground rounded-xl py-2.5 text-sm font-medium hover:bg-accent transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Password Change Modal */}
       {passwordModal && (

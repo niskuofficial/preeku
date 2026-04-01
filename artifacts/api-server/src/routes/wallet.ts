@@ -8,7 +8,7 @@ const router: IRouter = Router();
 async function getOrCreateWallet(userId: string) {
   const [wallet] = await db.select().from(walletTable).where(eq(walletTable.userId, userId)).limit(1);
   if (wallet) return wallet;
-  const [created] = await db.insert(walletTable).values({ userId, balance: "1000000", initialBalance: "1000000" }).returning();
+  const [created] = await db.insert(walletTable).values({ userId, balance: "100000", initialBalance: "100000" }).returning();
   return created;
 }
 
@@ -75,7 +75,7 @@ router.post("/account/reset", requireAuth, async (req, res) => {
     await db.delete(positionsTable).where(eq(positionsTable.userId, userId));
     const wallet = await getOrCreateWallet(userId);
     await db.update(walletTable)
-      .set({ balance: "1000000", updatedAt: new Date() })
+      .set({ balance: "100000", updatedAt: new Date() })
       .where(eq(walletTable.id, wallet.id));
     res.json({ success: true, message: "Account reset successfully" });
   } catch (err) {

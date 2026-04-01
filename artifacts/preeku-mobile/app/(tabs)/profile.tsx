@@ -341,7 +341,7 @@ export default function ProfileScreen() {
               { label: "Client ID", value: BROKER_ID },
               { label: "Account Type", value: "Trading & Investing" },
               { label: "Segment", value: "NSE · BSE · Equity" },
-              { label: "Initial Capital", value: "₹10,00,000" },
+              { label: "Initial Capital", value: "₹1,00,000" },
               { label: "KYC Status", value: "Verified ✓" },
               { label: "Plan", value: "Free Forever" },
             ].map(({ label, value }, idx, arr) => (

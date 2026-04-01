@@ -8,6 +8,7 @@ import portfolioRouter from "./portfolio";
 import angelRouter from "./angel";
 import adminRouter from "./admin";
 import userRouter from "./user";
+import mobileRouter from "./mobile";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(portfolioRouter);
 router.use(angelRouter);
 router.use(adminRouter);
 router.use(userRouter);
+router.use(mobileRouter);
 
 export default router;
