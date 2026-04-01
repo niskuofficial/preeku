@@ -73,7 +73,7 @@ export default function Markets() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
           type="search"
-          placeholder="Search 2,200+ NSE stocks by symbol or name..."
+          placeholder="Search NSE stocks by symbol or name..."
           value={search}
           onChange={(e) => handleSearch(e.target.value)}
           className="pl-10 bg-card border-border text-foreground placeholder:text-muted-foreground"
