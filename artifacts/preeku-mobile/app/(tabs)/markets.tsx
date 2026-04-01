@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState } from "react";
 import {
   View, Text, FlatList, TextInput,
   TouchableOpacity, Platform, RefreshControl, ActivityIndicator,
@@ -12,7 +12,8 @@ import { useTradingContext } from "@/context/TradingContext";
 import { FlashingPrice } from "@/components/FlashingPrice";
 import { useLivePrices, useLivePrice } from "@/context/LivePricesContext";
 
-const PAGE_SIZE = 100;
+const INITIAL_SIZE = 20;
+const LOAD_MORE_SIZE = 10;
 
 interface Stock {
   symbol: string; name: string; exchange: string; sector: string;
@@ -75,10 +76,10 @@ function StockRow({ item, onPress, onBuy, onSell, colors }: {
   );
 }
 
-function buildApiUrl(search: string, offset: number) {
+function buildApiUrl(search: string, offset: number, limit: number) {
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
   const base = domain ? `https://${domain}` : "http://localhost:8080";
-  const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
   if (search.trim()) params.set("search", search.trim());
   return `${base}/api/stocks?${params}`;
 }
@@ -109,14 +110,17 @@ export default function MarketsScreen() {
     isFetching,
   } = useInfiniteQuery<Stock[]>({
     queryKey: ["stocks-infinite", debouncedSearch],
-    initialPageParam: 0,
+    initialPageParam: { offset: 0, limit: INITIAL_SIZE },
     queryFn: async ({ pageParam }) => {
-      const res = await fetch(buildApiUrl(debouncedSearch, pageParam as number));
+      const { offset, limit } = pageParam as { offset: number; limit: number };
+      const res = await fetch(buildApiUrl(debouncedSearch, offset, limit));
       return res.json();
     },
-    getNextPageParam: (lastPage, allPages) => {
-      if (!Array.isArray(lastPage) || lastPage.length < PAGE_SIZE) return undefined;
-      return allPages.reduce((sum, p) => sum + p.length, 0);
+    getNextPageParam: (lastPage, allPages, lastPageParam) => {
+      const { limit } = lastPageParam as { offset: number; limit: number };
+      if (!Array.isArray(lastPage) || lastPage.length < limit) return undefined;
+      const totalLoaded = allPages.reduce((sum, p) => sum + p.length, 0);
+      return { offset: totalLoaded, limit: LOAD_MORE_SIZE };
     },
     staleTime: 60000,
   });
@@ -126,9 +130,6 @@ export default function MarketsScreen() {
   const losers = stockList.length - gainers;
   const topInset = Platform.OS === "web" ? 67 : insets.top;
 
-  const onEndReached = useCallback(() => {
-    if (hasNextPage && !isFetchingNextPage) fetchNextPage();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -187,8 +188,6 @@ export default function MarketsScreen() {
         keyExtractor={(item) => item.symbol}
         refreshControl={<RefreshControl refreshing={isFetching && !isFetchingNextPage} onRefresh={refetch} tintColor={colors.primary} />}
         contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 120 : 120 }}
-        onEndReached={onEndReached}
-        onEndReachedThreshold={0.3}
         renderItem={({ item }) => (
           <StockRow
             item={item}
@@ -209,7 +208,7 @@ export default function MarketsScreen() {
               style={{ margin: 16, backgroundColor: colors.card, borderRadius: 12, padding: 14, alignItems: "center", borderWidth: 1, borderColor: colors.border }}
               onPress={() => fetchNextPage()}
             >
-              <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Load More Stocks</Text>
+              <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Load More (+10)</Text>
             </TouchableOpacity>
           ) : stockList.length > 0 ? (
             <Text style={{ textAlign: "center", color: colors.mutedForeground, padding: 20, fontFamily: "Inter_400Regular", fontSize: 12 }}>

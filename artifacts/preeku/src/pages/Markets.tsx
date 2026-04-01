@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useRef } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { formatINR, formatPercent, pnlClass } from "@/lib/format";
 import { useTradingContext } from "@/context/TradingContext";
@@ -6,7 +6,8 @@ import { useLivePrices } from "@/context/LivePricesContext";
 import { Search, TrendingUp, TrendingDown, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
-const PAGE_SIZE = 100;
+const INITIAL_SIZE = 20;
+const LOAD_MORE_SIZE = 10;
 
 interface Stock {
   symbol: string; name: string; exchange: string; sector: string;
@@ -14,8 +15,8 @@ interface Stock {
   high: number; low: number; volume: number; marketCap: number;
 }
 
-async function fetchStocks(search: string, offset: number): Promise<Stock[]> {
-  const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
+async function fetchStocks(search: string, offset: number, limit: number): Promise<Stock[]> {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
   if (search.trim()) params.set("search", search.trim());
   const res = await fetch(`/api/stocks?${params}`);
   return res.json();
@@ -26,7 +27,6 @@ export default function Markets() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const { openOrderWindow } = useTradingContext();
   const { prices } = useLivePrices();
-  const loaderRef = useRef<HTMLDivElement | null>(null);
 
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleSearch = (value: string) => {
@@ -35,30 +35,24 @@ export default function Markets() {
     debounceTimer.current = setTimeout(() => setDebouncedSearch(value), 350);
   };
 
+
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isFetching } = useInfiniteQuery<Stock[]>({
     queryKey: ["stocks-infinite", debouncedSearch],
-    initialPageParam: 0,
-    queryFn: ({ pageParam }) => fetchStocks(debouncedSearch, pageParam as number),
-    getNextPageParam: (lastPage, allPages) => {
-      if (!Array.isArray(lastPage) || lastPage.length < PAGE_SIZE) return undefined;
-      return allPages.reduce((sum, p) => sum + p.length, 0);
+    initialPageParam: { offset: 0, limit: INITIAL_SIZE },
+    queryFn: ({ pageParam }) => {
+      const { offset, limit } = pageParam as { offset: number; limit: number };
+      return fetchStocks(debouncedSearch, offset, limit);
+    },
+    getNextPageParam: (lastPage, allPages, lastPageParam) => {
+      const { limit } = lastPageParam as { offset: number; limit: number };
+      if (!Array.isArray(lastPage) || lastPage.length < limit) return undefined;
+      const totalLoaded = allPages.reduce((sum, p) => sum + p.length, 0);
+      return { offset: totalLoaded, limit: LOAD_MORE_SIZE };
     },
     staleTime: 60000,
   });
 
   const stockList: Stock[] = data?.pages.flat() ?? [];
-
-  // Intersection observer for infinite scroll
-  useEffect(() => {
-    const el = loaderRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      (entries) => { if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) fetchNextPage(); },
-      { threshold: 0.1 }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const gainers = stockList.filter((s) => (prices[s.symbol]?.changePercent ?? s.changePercent) >= 0).length;
   const losers = stockList.length - gainers;
@@ -172,17 +166,23 @@ export default function Markets() {
           </tbody>
         </table>
 
-        {/* Infinite scroll trigger */}
-        <div ref={loaderRef} className="h-10 flex items-center justify-center">
-          {isFetchingNextPage && (
-            <div className="flex items-center gap-2 text-muted-foreground text-sm py-4">
+        {/* Load More footer */}
+        <div className="flex items-center justify-center p-4">
+          {isFetchingNextPage ? (
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
               <Loader2 className="w-4 h-4 animate-spin" />
-              Loading more stocks...
+              Loading 10 more stocks...
             </div>
-          )}
-          {!hasNextPage && stockList.length > 0 && !isLoading && (
-            <p className="text-muted-foreground text-xs py-4">All {stockList.length} stocks loaded</p>
-          )}
+          ) : hasNextPage ? (
+            <button
+              onClick={() => fetchNextPage()}
+              className="px-5 py-2 text-sm font-semibold bg-card border border-border rounded-lg text-primary hover:bg-accent transition-colors"
+            >
+              Load More (+10)
+            </button>
+          ) : stockList.length > 0 && !isLoading ? (
+            <p className="text-muted-foreground text-xs">All {stockList.length} stocks loaded</p>
+          ) : null}
         </div>
       </div>
     </div>
