@@ -91,51 +91,92 @@ function HeatmapBlock({ sector, stocks }: {
   const enriched = stocks
     .map((s) => ({ ...s, pct: prices[s.symbol]?.changePercent ?? s.changePercent, ltp: prices[s.symbol]?.ltp ?? 0 }))
     .filter((s) => s.pct !== 0)
-    .sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct))
-    .slice(0, 6);
+    .sort((a, b) => b.marketCap - a.marketCap)
+    .slice(0, 8);
 
   if (enriched.length === 0) return null;
 
   const liveSectorAvg = enriched.reduce((acc, s) => acc + s.pct, 0) / enriched.length;
+  const isUp = liveSectorAvg >= 0;
 
-  const getTileStyle = (pct: number): React.CSSProperties => {
-    if (pct > 2) return { background: "#16a34a" };
-    if (pct > 1) return { background: "#15803d" };
-    if (pct > 0) return { background: "#166534" };
-    if (pct > -1) return { background: "#7f1d1d" };
-    if (pct > -2) return { background: "#991b1b" };
-    return { background: "#dc2626" };
+  const getTileColors = (pct: number): { bg: string; border: string; text: string; badge: string } => {
+    if (pct >= 3)  return { bg: "rgba(22,163,74,0.85)",  border: "rgba(74,222,128,0.4)", text: "#fff",        badge: "rgba(255,255,255,0.2)" };
+    if (pct >= 1)  return { bg: "rgba(21,128,61,0.75)",  border: "rgba(74,222,128,0.3)", text: "#bbf7d0",     badge: "rgba(255,255,255,0.15)" };
+    if (pct > 0)   return { bg: "rgba(20,83,45,0.70)",   border: "rgba(74,222,128,0.2)", text: "#86efac",     badge: "rgba(255,255,255,0.12)" };
+    if (pct > -1)  return { bg: "rgba(127,29,29,0.70)",  border: "rgba(248,113,113,0.2)", text: "#fca5a5",    badge: "rgba(255,255,255,0.12)" };
+    if (pct > -3)  return { bg: "rgba(153,27,27,0.78)",  border: "rgba(248,113,113,0.3)", text: "#fecaca",    badge: "rgba(255,255,255,0.15)" };
+    return              { bg: "rgba(220,38,38,0.85)",  border: "rgba(248,113,113,0.4)", text: "#fff",        badge: "rgba(255,255,255,0.2)" };
   };
 
   return (
-    <div className="mb-5">
-      <div className="flex items-center gap-3 mb-2">
-        <span className="text-sm font-bold text-foreground">{sector}</span>
-        <span
-          className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full"
+    <div className="mb-4">
+      {/* Sector header */}
+      <div className="flex items-center gap-2 mb-2 px-1">
+        <div
+          className="w-2 h-2 rounded-full flex-shrink-0"
+          style={{ background: isUp ? "#4ade80" : "#f87171" }}
+        />
+        <span className="text-sm font-semibold text-foreground">{sector}</span>
+        <div
+          className="flex items-center gap-1 text-xs font-mono font-bold px-2 py-0.5 rounded-full"
           style={{
-            background: liveSectorAvg >= 0 ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)",
-            color: liveSectorAvg >= 0 ? "#4ade80" : "#f87171",
+            background: isUp ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
+            color: isUp ? "#4ade80" : "#f87171",
+            border: `1px solid ${isUp ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)"}`,
           }}
         >
-          {liveSectorAvg >= 0 ? "+" : ""}{liveSectorAvg.toFixed(2)}%
-        </span>
+          {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+          {isUp ? "+" : ""}{liveSectorAvg.toFixed(2)}%
+        </div>
       </div>
-      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(enriched.length, 4)}, 1fr)` }}>
-        {enriched.slice(0, 4).map((s) => (
-          <button
-            key={s.symbol}
-            onClick={() => openOrderWindow({ symbol: s.symbol, name: s.name, currentPrice: s.ltp })}
-            data-testid={`heatmap-stock-${s.symbol}`}
-            className="rounded-lg p-3 text-left transition-all hover:brightness-110 cursor-pointer"
-            style={getTileStyle(s.pct)}
-          >
-            <div className="text-white text-xs font-bold truncate leading-tight">{s.symbol}</div>
-            <div className="text-white/85 text-xs font-mono mt-1 font-semibold">
-              {s.pct >= 0 ? "+" : ""}{s.pct.toFixed(2)}%
-            </div>
-          </button>
-        ))}
+
+      {/* Tiles grid */}
+      <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${Math.min(enriched.length, 4)}, 1fr)` }}>
+        {enriched.map((s) => {
+          const colors = getTileColors(s.pct);
+          return (
+            <button
+              key={s.symbol}
+              onClick={() => openOrderWindow({ symbol: s.symbol, name: s.name, currentPrice: s.ltp })}
+              data-testid={`heatmap-stock-${s.symbol}`}
+              title={s.name}
+              className="group relative rounded-lg p-2.5 text-left transition-all duration-150 cursor-pointer overflow-hidden"
+              style={{
+                background: colors.bg,
+                border: `1px solid ${colors.border}`,
+                minHeight: "64px",
+              }}
+            >
+              {/* Hover shimmer */}
+              <div
+                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                style={{ background: "rgba(255,255,255,0.07)" }}
+              />
+              <div className="relative z-10">
+                <div
+                  className="text-xs font-bold leading-tight truncate"
+                  style={{ color: colors.text }}
+                >
+                  {s.symbol}
+                </div>
+                {s.ltp > 0 && (
+                  <div
+                    className="text-xs font-mono mt-0.5 truncate"
+                    style={{ color: colors.text, opacity: 0.75 }}
+                  >
+                    ₹{s.ltp.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                  </div>
+                )}
+                <div
+                  className="inline-flex items-center text-xs font-mono font-bold mt-1 px-1.5 py-0.5 rounded"
+                  style={{ background: colors.badge, color: colors.text }}
+                >
+                  {s.pct >= 0 ? "+" : ""}{s.pct.toFixed(2)}%
+                </div>
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -348,11 +389,27 @@ export default function Dashboard() {
 
       {/* Market Heatmap */}
       <div className="bg-card border border-border rounded-xl p-5">
-        <h2 className="font-semibold text-foreground mb-5">Market Heatmap</h2>
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h2 className="font-semibold text-foreground">Market Heatmap</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Sector-wise performance · sorted by market cap</p>
+          </div>
+          {/* Color legend */}
+          <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
+            <span>Loss</span>
+            {["rgba(220,38,38,0.85)", "rgba(153,27,27,0.78)", "rgba(127,29,29,0.70)", "rgba(20,83,45,0.70)", "rgba(21,128,61,0.75)", "rgba(22,163,74,0.85)"].map((bg, i) => (
+              <div key={i} className="w-5 h-4 rounded" style={{ background: bg }} />
+            ))}
+            <span>Gain</span>
+          </div>
+        </div>
         {heatmapData.length === 0 ? (
-          <p className="text-muted-foreground text-sm text-center py-6">Loading live data...</p>
+          <div className="flex flex-col items-center justify-center py-10 gap-2">
+            <Activity className="w-8 h-8 text-muted-foreground/40" />
+            <p className="text-muted-foreground text-sm">Loading live market data...</p>
+          </div>
         ) : (
-          <div data-testid="market-heatmap">
+          <div data-testid="market-heatmap" className="space-y-3">
             {heatmapData
               .filter((sec: { sector: string; changePercent: number; stocks: { symbol: string; name: string; changePercent: number; marketCap: number }[] }) =>
                 sec.stocks.some((s) => s.changePercent !== 0)
