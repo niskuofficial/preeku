@@ -18,8 +18,8 @@ export function formatINRCompact(amount: number): string {
   return `${sign}₹${abs.toFixed(2)}`;
 }
 
-export function formatPercent(value: number): string {
-  if (isNaN(value)) return "0.00%";
+export function formatPercent(value: number | null | undefined): string {
+  if (value == null || !isFinite(value) || isNaN(value)) return "0.00%";
   const sign = value >= 0 ? "+" : "";
   return `${sign}${value.toFixed(2)}%`;
 }

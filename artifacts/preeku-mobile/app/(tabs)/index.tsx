@@ -19,7 +19,8 @@ function formatINR(n: number) {
   if (Math.abs(n) >= 1e5) return "₹" + (n / 1e5).toFixed(2) + "L";
   return "₹" + n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
-function formatPct(n: number) {
+function formatPct(n: number | null | undefined) {
+  if (n == null || !isFinite(n) || isNaN(n)) return "+0.00%";
   return (n >= 0 ? "+" : "") + n.toFixed(2) + "%";
 }
 

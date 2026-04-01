@@ -92,11 +92,17 @@ router.get("/market/heatmap", async (req, res) => {
       sectorMap.set(s.sector, existing);
     }
 
+    function safePct(cur: number, prev: number): number {
+      if (!prev || !isFinite(prev) || !isFinite(cur)) return 0;
+      const pct = ((cur - prev) / prev) * 100;
+      return isFinite(pct) ? parseFloat(pct.toFixed(2)) : 0;
+    }
+
     const heatmap = Array.from(sectorMap.entries()).map(([sector, sectorStocks]) => {
-      const avgChange = sectorStocks.reduce((acc, s) => {
-        const chg = ((parseFloat(s.currentPrice) - parseFloat(s.previousClose)) / parseFloat(s.previousClose)) * 100;
-        return acc + chg;
-      }, 0) / sectorStocks.length;
+      const stocksWithPrices = sectorStocks.filter((s) => parseFloat(s.previousClose) > 0);
+      const avgChange = stocksWithPrices.length > 0
+        ? stocksWithPrices.reduce((acc, s) => acc + safePct(parseFloat(s.currentPrice), parseFloat(s.previousClose)), 0) / stocksWithPrices.length
+        : 0;
 
       return {
         sector,
@@ -104,7 +110,7 @@ router.get("/market/heatmap", async (req, res) => {
         stocks: sectorStocks.map((s) => ({
           symbol: s.symbol,
           name: s.name,
-          changePercent: parseFloat((((parseFloat(s.currentPrice) - parseFloat(s.previousClose)) / parseFloat(s.previousClose)) * 100).toFixed(2)),
+          changePercent: safePct(parseFloat(s.currentPrice), parseFloat(s.previousClose)),
           marketCap: parseFloat(s.marketCap),
         })),
       };
