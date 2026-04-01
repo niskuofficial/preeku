@@ -1,19 +1,21 @@
 import { Router, type IRouter } from "express";
 import { db, ordersTable, walletTable, positionsTable, stocksTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import { requireAuth } from "../middlewares/requireAuth";
+import { getOrCreateWallet } from "./wallet";
 
 const router: IRouter = Router();
 
-router.get("/orders", async (req, res) => {
+router.get("/orders", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
   try {
     const status = req.query.status as string | undefined;
     let orders;
     if (status && ["EXECUTED", "CANCELLED", "PENDING"].includes(status)) {
-      orders = await db.select().from(ordersTable).where(eq(ordersTable.status, status));
+      orders = await db.select().from(ordersTable).where(and(eq(ordersTable.userId, userId), eq(ordersTable.status, status)));
     } else {
-      orders = await db.select().from(ordersTable);
+      orders = await db.select().from(ordersTable).where(eq(ordersTable.userId, userId));
     }
-
     res.json(orders.map(mapOrder));
   } catch (err) {
     req.log.error({ err }, "Error fetching orders");
@@ -21,7 +23,8 @@ router.get("/orders", async (req, res) => {
   }
 });
 
-router.post("/orders", async (req, res) => {
+router.post("/orders", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
   try {
     const { symbol, orderType, side, productType, quantity, limitPrice } = req.body;
 
@@ -40,12 +43,7 @@ router.post("/orders", async (req, res) => {
     const executedPrice = orderType === "MARKET" ? parseFloat(stock.currentPrice) : (limitPrice ?? parseFloat(stock.currentPrice));
     const totalValue = executedPrice * quantity;
 
-    // Get or create wallet
-    let [wallet] = await db.select().from(walletTable).limit(1);
-    if (!wallet) {
-      [wallet] = await db.insert(walletTable).values({ balance: "1000000", initialBalance: "1000000" }).returning();
-    }
-
+    const wallet = await getOrCreateWallet(userId);
     const currentBalance = parseFloat(wallet.balance);
 
     if (side === "BUY") {
@@ -54,14 +52,12 @@ router.post("/orders", async (req, res) => {
         return;
       }
 
-      // Deduct from wallet
       await db.update(walletTable)
         .set({ balance: (currentBalance - totalValue).toFixed(2), updatedAt: new Date() })
         .where(eq(walletTable.id, wallet.id));
 
-      // Update or create position
       const [existingPos] = await db.select().from(positionsTable)
-        .where(and(eq(positionsTable.symbol, upperSymbol), eq(positionsTable.productType, productType)));
+        .where(and(eq(positionsTable.userId, userId), eq(positionsTable.symbol, upperSymbol), eq(positionsTable.productType, productType)));
 
       if (existingPos) {
         const newQty = existingPos.quantity + quantity;
@@ -71,6 +67,7 @@ router.post("/orders", async (req, res) => {
           .where(eq(positionsTable.id, existingPos.id));
       } else {
         await db.insert(positionsTable).values({
+          userId,
           symbol: upperSymbol,
           stockName: stock.name,
           quantity,
@@ -79,24 +76,20 @@ router.post("/orders", async (req, res) => {
         });
       }
     } else if (side === "SELL") {
-      // Check position exists
       const [existingPos] = await db.select().from(positionsTable)
-        .where(and(eq(positionsTable.symbol, upperSymbol), eq(positionsTable.productType, productType)));
+        .where(and(eq(positionsTable.userId, userId), eq(positionsTable.symbol, upperSymbol), eq(positionsTable.productType, productType)));
 
       if (!existingPos || existingPos.quantity < quantity) {
         res.status(400).json({ error: `Insufficient holdings. Available: ${existingPos?.quantity ?? 0} shares` });
         return;
       }
 
-      // Calculate P&L
       const pnl = (executedPrice - parseFloat(existingPos.avgBuyPrice)) * quantity;
 
-      // Add back to wallet (sale proceeds)
       await db.update(walletTable)
         .set({ balance: (currentBalance + totalValue).toFixed(2), updatedAt: new Date() })
         .where(eq(walletTable.id, wallet.id));
 
-      // Update position
       const newQty = existingPos.quantity - quantity;
       if (newQty === 0) {
         await db.delete(positionsTable).where(eq(positionsTable.id, existingPos.id));
@@ -106,8 +99,8 @@ router.post("/orders", async (req, res) => {
           .where(eq(positionsTable.id, existingPos.id));
       }
 
-      // Place the order with P&L recorded
       const [order] = await db.insert(ordersTable).values({
+        userId,
         symbol: upperSymbol,
         stockName: stock.name,
         orderType,
@@ -127,6 +120,7 @@ router.post("/orders", async (req, res) => {
     }
 
     const [order] = await db.insert(ordersTable).values({
+      userId,
       symbol: upperSymbol,
       stockName: stock.name,
       orderType,
@@ -148,10 +142,11 @@ router.post("/orders", async (req, res) => {
   }
 });
 
-router.post("/orders/:id/cancel", async (req, res) => {
+router.post("/orders/:id/cancel", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
   try {
     const id = parseInt(req.params.id);
-    const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, id));
+    const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, id), eq(ordersTable.userId, userId)));
 
     if (!order) {
       res.status(404).json({ error: "Order not found" });

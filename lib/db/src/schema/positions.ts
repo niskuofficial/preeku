@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 
 export const positionsTable = pgTable("positions", {
   id: serial("id").primaryKey(),
+  userId: text("user_id").notNull().default("LEGACY"),
   symbol: text("symbol").notNull(),
   stockName: text("stock_name").notNull(),
   quantity: integer("quantity").notNull(),

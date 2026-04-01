@@ -4,10 +4,11 @@ import { z } from "zod/v4";
 
 export const watchlistTable = pgTable("watchlist", {
   id: serial("id").primaryKey(),
+  userId: text("user_id").notNull().default("LEGACY"),
   symbol: text("symbol").notNull(),
   addedAt: timestamp("added_at").notNull().defaultNow(),
 }, (t) => [
-  unique().on(t.symbol),
+  unique().on(t.userId, t.symbol),
 ]);
 
 export const insertWatchlistSchema = createInsertSchema(watchlistTable).omit({ id: true, addedAt: true });

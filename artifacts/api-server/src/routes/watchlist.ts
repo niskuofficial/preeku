@@ -1,18 +1,15 @@
 import { Router, type IRouter } from "express";
 import { db, watchlistTable, stocksTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
+import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
-router.get("/watchlist", async (req, res) => {
+router.get("/watchlist", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
   try {
-    const watchlist = await db.select().from(watchlistTable);
-    const symbols = watchlist.map((w) => w.symbol);
-
-    if (symbols.length === 0) {
-      res.json([]);
-      return;
-    }
+    const watchlist = await db.select().from(watchlistTable).where(eq(watchlistTable.userId, userId));
+    if (watchlist.length === 0) { res.json([]); return; }
 
     const stocks = await db.select().from(stocksTable);
     const stockMap = new Map(stocks.map((s) => [s.symbol, s]));
@@ -39,59 +36,46 @@ router.get("/watchlist", async (req, res) => {
   }
 });
 
-router.post("/watchlist", async (req, res) => {
+router.post("/watchlist", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
   try {
     const { symbol } = req.body;
-    if (!symbol) {
-      res.status(400).json({ error: "Symbol is required" });
-      return;
-    }
+    if (!symbol) { res.status(400).json({ error: "Symbol is required" }); return; }
 
     const upperSymbol = symbol.toUpperCase();
     const [stock] = await db.select().from(stocksTable).where(eq(stocksTable.symbol, upperSymbol));
-    if (!stock) {
-      res.status(404).json({ error: "Stock not found" });
-      return;
-    }
+    if (!stock) { res.status(404).json({ error: "Stock not found" }); return; }
 
-    const [existing] = await db.select().from(watchlistTable).where(eq(watchlistTable.symbol, upperSymbol));
-    if (existing) {
-      const currentPrice = parseFloat(stock.currentPrice);
-      const previousClose = parseFloat(stock.previousClose);
-      res.status(201).json({
-        id: existing.id,
-        symbol: existing.symbol,
-        name: stock.name,
-        currentPrice,
-        change: currentPrice - previousClose,
-        changePercent: ((currentPrice - previousClose) / previousClose) * 100,
-        addedAt: existing.addedAt,
-      });
-      return;
-    }
+    const [existing] = await db.select().from(watchlistTable)
+      .where(and(eq(watchlistTable.userId, userId), eq(watchlistTable.symbol, upperSymbol)));
 
-    const [item] = await db.insert(watchlistTable).values({ symbol: upperSymbol }).returning();
     const currentPrice = parseFloat(stock.currentPrice);
     const previousClose = parseFloat(stock.previousClose);
-    res.status(201).json({
-      id: item.id,
-      symbol: item.symbol,
+    const payload = {
+      id: existing?.id ?? 0,
+      symbol: upperSymbol,
       name: stock.name,
       currentPrice,
       change: currentPrice - previousClose,
-      changePercent: ((currentPrice - previousClose) / previousClose) * 100,
-      addedAt: item.addedAt,
-    });
+      changePercent: previousClose > 0 ? ((currentPrice - previousClose) / previousClose) * 100 : 0,
+      addedAt: existing?.addedAt ?? new Date(),
+    };
+
+    if (existing) { res.status(201).json(payload); return; }
+
+    const [item] = await db.insert(watchlistTable).values({ userId, symbol: upperSymbol }).returning();
+    res.status(201).json({ ...payload, id: item.id, addedAt: item.addedAt });
   } catch (err) {
     req.log.error({ err }, "Error adding to watchlist");
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-router.delete("/watchlist/:symbol", async (req, res) => {
+router.delete("/watchlist/:symbol", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
   try {
-    const { symbol } = req.params;
-    await db.delete(watchlistTable).where(eq(watchlistTable.symbol, symbol.toUpperCase()));
+    await db.delete(watchlistTable)
+      .where(and(eq(watchlistTable.userId, userId), eq(watchlistTable.symbol, req.params.symbol.toUpperCase())));
     res.json({ message: "Removed from watchlist" });
   } catch (err) {
     req.log.error({ err }, "Error removing from watchlist");

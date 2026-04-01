@@ -6,6 +6,8 @@ import watchlistRouter from "./watchlist";
 import ordersRouter from "./orders";
 import portfolioRouter from "./portfolio";
 import angelRouter from "./angel";
+import adminRouter from "./admin";
+import userRouter from "./user";
 
 const router: IRouter = Router();
 
@@ -16,5 +18,7 @@ router.use(watchlistRouter);
 router.use(ordersRouter);
 router.use(portfolioRouter);
 router.use(angelRouter);
+router.use(adminRouter);
+router.use(userRouter);
 
 export default router;

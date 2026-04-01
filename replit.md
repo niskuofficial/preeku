@@ -1,3 +1,24 @@
+# Preeku — Paper Trading Platform
+
+## Authentication
+- **Clerk Auth** is integrated (server-side `@clerk/express`, client-side `@clerk/react`)
+- All user-specific API routes (`/api/wallet`, `/api/orders`, `/api/portfolio/*`, `/api/watchlist`) require authentication via `requireAuth` middleware
+- **First user to sign up automatically becomes admin** (no manual bootstrap needed)
+- Admin can manage users at `/admin` page: view wallets, edit balances, block/unblock users, toggle admin role
+- `/api/admin/bootstrap` endpoint allows claiming admin if no admin exists yet (failsafe)
+
+## User Flow
+1. Landing page (`/`) shown to unauthenticated users
+2. Sign-up (`/sign-up`) / Sign-in (`/sign-in`) via Clerk (email + Google)
+3. After auth → redirected to `/dashboard`
+4. Sidebar shows Admin link only to users with `isAdmin: true` in `users` table
+
+## Database Schema (multi-user)
+- `users` table: `clerkId`, `email`, `name`, `isAdmin`, `isBlocked`
+- `wallet` table: has `user_id` column (scoped per user, auto-created on first login)
+- `orders`, `positions`, `watchlist` tables: all have `user_id` column
+- Legacy data (pre-auth) has `user_id = 'LEGACY'`
+
 # Workspace
 
 ## Overview
