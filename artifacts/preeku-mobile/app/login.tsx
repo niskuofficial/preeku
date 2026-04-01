@@ -1,28 +1,25 @@
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import {
   View, Text, TextInput, TouchableOpacity,
   KeyboardAvoidingView, Platform, ScrollView,
-  ActivityIndicator, Alert, Image, Animated, Dimensions,
+  ActivityIndicator, Alert, Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
 
-const BRAND = "#818cf8";
-const BRAND_DARK = "#6366f1";
-const BRAND_LIGHT = "#e0e7ff";
+const ORANGE = "#f05a28";
+const ORANGE_DARK = "#d44a1c";
+const BLACK = "#111111";
 
 export default function LoginScreen() {
-  const colors = useColors();
   const { resolvedTheme } = useAppTheme();
   const isDark = resolvedTheme === "dark";
   const insets = useSafeAreaInsets();
   const { login } = useAuth();
-  const { width } = Dimensions.get("window");
 
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [name, setName] = useState("");
@@ -55,90 +52,76 @@ export default function LoginScreen() {
     }
   };
 
-  const inputStyle = (field: string) => ({
+  const bg = isDark ? "#0d0d0d" : "#fafafa";
+  const cardBg = isDark ? "#1a1a1a" : "#ffffff";
+  const cardBorder = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)";
+  const labelColor = isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.45)";
+  const textColor = isDark ? "#ffffff" : BLACK;
+  const placeholder = isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.25)";
+  const inputBg = isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)";
+  const inputBorder = isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)";
+
+  const inputRow = (field: string) => ({
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(99,102,241,0.05)",
+    backgroundColor: focused === field ? (isDark ? "rgba(240,90,40,0.08)" : "rgba(240,90,40,0.04)") : inputBg,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: focused === field
-      ? BRAND
-      : isDark ? "rgba(255,255,255,0.1)" : "rgba(99,102,241,0.15)",
-    paddingHorizontal: 16,
+    borderColor: focused === field ? ORANGE : inputBorder,
+    paddingHorizontal: 15,
     marginBottom: 14,
   });
 
   return (
-    <View style={{ flex: 1, backgroundColor: isDark ? "#070c14" : "#f5f6ff" }}>
-      {/* Top gradient blob */}
+    <View style={{ flex: 1, backgroundColor: bg }}>
+      {/* Subtle warm top glow */}
       <LinearGradient
         colors={isDark
-          ? ["rgba(99,102,241,0.18)", "transparent"]
-          : ["rgba(99,102,241,0.12)", "transparent"]}
-        style={{ position: "absolute", top: 0, left: 0, right: 0, height: 340 }}
+          ? ["rgba(240,90,40,0.14)", "transparent"]
+          : ["rgba(240,90,40,0.08)", "transparent"]}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, height: 320 }}
       />
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <ScrollView
-          contentContainerStyle={{
-            flexGrow: 1,
-            paddingTop: insets.top + 16,
-            paddingBottom: insets.bottom + 24,
-            paddingHorizontal: 24,
-          }}
+          contentContainerStyle={{ flexGrow: 1, paddingTop: insets.top + 20, paddingBottom: insets.bottom + 28, paddingHorizontal: 24 }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Logo section */}
-          <View style={{ alignItems: "center", marginTop: 24, marginBottom: 36 }}>
-            <View style={{
-              width: 88, height: 88, borderRadius: 26,
-              backgroundColor: BRAND,
-              alignItems: "center", justifyContent: "center",
-              shadowColor: BRAND, shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: 0.45, shadowRadius: 20, elevation: 12,
-              marginBottom: 18,
-            }}>
-              <Image
-                source={require("../assets/images/logo.png")}
-                style={{ width: 56, height: 56, borderRadius: 12 }}
-                resizeMode="contain"
-              />
-            </View>
+          {/* Logo — no background, just the image */}
+          <View style={{ alignItems: "center", marginTop: 20, marginBottom: 32 }}>
+            <Image
+              source={require("../assets/images/logo.png")}
+              style={{ width: 90, height: 90, borderRadius: 22, marginBottom: 16 }}
+              resizeMode="contain"
+            />
             <Text style={{
-              fontSize: 30, fontWeight: "700", letterSpacing: -0.5,
-              color: isDark ? "#fff" : "#1e1b4b",
-              fontFamily: "Inter_700Bold", marginBottom: 6,
+              fontSize: 32, fontWeight: "800", letterSpacing: -0.8,
+              color: textColor, fontFamily: "Inter_700Bold", marginBottom: 6,
             }}>
               Preeku
             </Text>
-            <Text style={{
-              fontSize: 13.5, color: isDark ? "rgba(255,255,255,0.45)" : "rgba(99,102,241,0.7)",
-              fontFamily: "Inter_400Regular", textAlign: "center", letterSpacing: 0.2,
-            }}>
-              Paper trading platform for Indian markets
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#22c55e" }} />
+              <Text style={{ fontSize: 13, color: labelColor, fontFamily: "Inter_400Regular" }}>
+                Live NSE paper trading
+              </Text>
+            </View>
           </View>
 
           {/* Card */}
           <View style={{
-            backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "#ffffff",
-            borderRadius: 24, borderWidth: 1,
-            borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(99,102,241,0.12)",
-            padding: 22,
-            shadowColor: isDark ? BRAND : "#6366f1",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: isDark ? 0.1 : 0.08,
-            shadowRadius: 20,
+            backgroundColor: cardBg, borderRadius: 22,
+            borderWidth: 1, borderColor: cardBorder,
+            padding: 20,
+            shadowColor: ORANGE, shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: isDark ? 0.15 : 0.1, shadowRadius: 24,
           }}>
-            {/* Tab switcher */}
+            {/* Sign In / Sign Up tabs */}
             <View style={{
               flexDirection: "row",
-              backgroundColor: isDark ? "rgba(255,255,255,0.06)" : BRAND_LIGHT + "60",
-              borderRadius: 14, padding: 4, marginBottom: 22,
+              backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
+              borderRadius: 12, padding: 4, marginBottom: 22,
             }}>
               {(["login", "signup"] as const).map((m) => (
                 <TouchableOpacity
@@ -146,18 +129,14 @@ export default function LoginScreen() {
                   onPress={() => { Haptics.selectionAsync(); setMode(m); }}
                   activeOpacity={0.8}
                   style={{
-                    flex: 1, paddingVertical: 11, borderRadius: 11,
-                    alignItems: "center",
-                    backgroundColor: mode === m ? BRAND : "transparent",
-                    shadowColor: mode === m ? BRAND : "transparent",
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.3, shadowRadius: 6,
+                    flex: 1, paddingVertical: 11, borderRadius: 10, alignItems: "center",
+                    backgroundColor: mode === m ? ORANGE : "transparent",
                   }}
                 >
                   <Text style={{
-                    fontSize: 14, fontWeight: "600",
-                    color: mode === m ? "#fff" : isDark ? "rgba(255,255,255,0.4)" : BRAND_DARK,
-                    fontFamily: "Inter_600SemiBold",
+                    fontSize: 14, fontWeight: "700",
+                    color: mode === m ? "#fff" : labelColor,
+                    fontFamily: "Inter_700Bold",
                   }}>
                     {m === "login" ? "Sign In" : "Sign Up"}
                   </Text>
@@ -165,73 +144,59 @@ export default function LoginScreen() {
               ))}
             </View>
 
-            {/* Name field (signup only) */}
+            {/* Name (sign up only) */}
             {mode === "signup" && (
               <View>
-                <Text style={{ fontSize: 12.5, color: isDark ? "rgba(255,255,255,0.45)" : BRAND_DARK, fontFamily: "Inter_500Medium", marginBottom: 7, letterSpacing: 0.3 }}>
-                  FULL NAME
+                <Text style={{ fontSize: 11.5, color: labelColor, fontFamily: "Inter_500Medium", marginBottom: 6, letterSpacing: 0.5, textTransform: "uppercase" }}>
+                  Full Name
                 </Text>
-                <View style={inputStyle("name")}>
-                  <Ionicons name="person-outline" size={17} color={focused === "name" ? BRAND : isDark ? "rgba(255,255,255,0.3)" : "rgba(99,102,241,0.5)"} style={{ marginRight: 10 }} />
+                <View style={inputRow("name")}>
+                  <Ionicons name="person-outline" size={16} color={focused === "name" ? ORANGE : labelColor} style={{ marginRight: 10 }} />
                   <TextInput
-                    value={name}
-                    onChangeText={setName}
-                    placeholder="Your name"
-                    placeholderTextColor={isDark ? "rgba(255,255,255,0.2)" : "rgba(99,102,241,0.35)"}
-                    style={{ flex: 1, paddingVertical: 14, fontSize: 15, color: isDark ? "#fff" : "#1e1b4b", fontFamily: "Inter_400Regular" }}
-                    autoCapitalize="words"
-                    returnKeyType="next"
-                    onFocus={() => setFocused("name")}
-                    onBlur={() => setFocused(null)}
+                    value={name} onChangeText={setName}
+                    placeholder="Your name" placeholderTextColor={placeholder}
+                    style={{ flex: 1, paddingVertical: 14, fontSize: 15, color: textColor, fontFamily: "Inter_400Regular" }}
+                    autoCapitalize="words" returnKeyType="next"
+                    onFocus={() => setFocused("name")} onBlur={() => setFocused(null)}
                   />
                 </View>
               </View>
             )}
 
-            {/* Email field */}
+            {/* Email */}
             <View>
-              <Text style={{ fontSize: 12.5, color: isDark ? "rgba(255,255,255,0.45)" : BRAND_DARK, fontFamily: "Inter_500Medium", marginBottom: 7, letterSpacing: 0.3 }}>
-                EMAIL ADDRESS
+              <Text style={{ fontSize: 11.5, color: labelColor, fontFamily: "Inter_500Medium", marginBottom: 6, letterSpacing: 0.5, textTransform: "uppercase" }}>
+                Email
               </Text>
-              <View style={inputStyle("email")}>
-                <Ionicons name="mail-outline" size={17} color={focused === "email" ? BRAND : isDark ? "rgba(255,255,255,0.3)" : "rgba(99,102,241,0.5)"} style={{ marginRight: 10 }} />
+              <View style={inputRow("email")}>
+                <Ionicons name="mail-outline" size={16} color={focused === "email" ? ORANGE : labelColor} style={{ marginRight: 10 }} />
                 <TextInput
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="you@example.com"
-                  placeholderTextColor={isDark ? "rgba(255,255,255,0.2)" : "rgba(99,102,241,0.35)"}
-                  style={{ flex: 1, paddingVertical: 14, fontSize: 15, color: isDark ? "#fff" : "#1e1b4b", fontFamily: "Inter_400Regular" }}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="next"
-                  onFocus={() => setFocused("email")}
-                  onBlur={() => setFocused(null)}
+                  value={email} onChangeText={setEmail}
+                  placeholder="you@example.com" placeholderTextColor={placeholder}
+                  style={{ flex: 1, paddingVertical: 14, fontSize: 15, color: textColor, fontFamily: "Inter_400Regular" }}
+                  keyboardType="email-address" autoCapitalize="none" autoCorrect={false} returnKeyType="next"
+                  onFocus={() => setFocused("email")} onBlur={() => setFocused(null)}
                 />
               </View>
             </View>
 
-            {/* Password field */}
+            {/* Password */}
             <View>
-              <Text style={{ fontSize: 12.5, color: isDark ? "rgba(255,255,255,0.45)" : BRAND_DARK, fontFamily: "Inter_500Medium", marginBottom: 7, letterSpacing: 0.3 }}>
-                PASSWORD
+              <Text style={{ fontSize: 11.5, color: labelColor, fontFamily: "Inter_500Medium", marginBottom: 6, letterSpacing: 0.5, textTransform: "uppercase" }}>
+                Password
               </Text>
-              <View style={inputStyle("password")}>
-                <Ionicons name="lock-closed-outline" size={17} color={focused === "password" ? BRAND : isDark ? "rgba(255,255,255,0.3)" : "rgba(99,102,241,0.5)"} style={{ marginRight: 10 }} />
+              <View style={inputRow("password")}>
+                <Ionicons name="lock-closed-outline" size={16} color={focused === "password" ? ORANGE : labelColor} style={{ marginRight: 10 }} />
                 <TextInput
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="••••••••"
-                  placeholderTextColor={isDark ? "rgba(255,255,255,0.2)" : "rgba(99,102,241,0.35)"}
+                  value={password} onChangeText={setPassword}
+                  placeholder="••••••••" placeholderTextColor={placeholder}
                   secureTextEntry={!showPassword}
-                  style={{ flex: 1, paddingVertical: 14, fontSize: 15, color: isDark ? "#fff" : "#1e1b4b", fontFamily: "Inter_400Regular" }}
-                  returnKeyType="done"
-                  onSubmitEditing={handleSubmit}
-                  onFocus={() => setFocused("password")}
-                  onBlur={() => setFocused(null)}
+                  style={{ flex: 1, paddingVertical: 14, fontSize: 15, color: textColor, fontFamily: "Inter_400Regular" }}
+                  returnKeyType="done" onSubmitEditing={handleSubmit}
+                  onFocus={() => setFocused("password")} onBlur={() => setFocused(null)}
                 />
                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                  <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={19} color={isDark ? "rgba(255,255,255,0.3)" : "rgba(99,102,241,0.5)"} />
+                  <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={labelColor} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -240,18 +205,18 @@ export default function LoginScreen() {
             <TouchableOpacity
               onPress={handleSubmit}
               disabled={!isValid || loading}
-              activeOpacity={0.88}
+              activeOpacity={0.85}
+              style={{ marginTop: 4 }}
             >
               <LinearGradient
-                colors={isValid ? [BRAND, BRAND_DARK] : [isDark ? "rgba(255,255,255,0.08)" : "#d1d5db", isDark ? "rgba(255,255,255,0.06)" : "#d1d5db"]}
+                colors={isValid
+                  ? [ORANGE, ORANGE_DARK]
+                  : isDark ? ["rgba(255,255,255,0.07)", "rgba(255,255,255,0.05)"] : ["#e5e7eb", "#e5e7eb"]}
                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                 style={{
                   borderRadius: 14, paddingVertical: 16,
                   alignItems: "center", justifyContent: "center",
-                  flexDirection: "row", gap: 8, marginTop: 6,
-                  shadowColor: isValid ? BRAND : "transparent",
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.4, shadowRadius: 12,
+                  flexDirection: "row", gap: 8,
                 }}
               >
                 {loading ? (
@@ -260,12 +225,12 @@ export default function LoginScreen() {
                   <>
                     <Ionicons
                       name={mode === "login" ? "log-in-outline" : "person-add-outline"}
-                      size={18}
-                      color={isValid ? "#fff" : isDark ? "rgba(255,255,255,0.3)" : "#9ca3af"}
+                      size={17}
+                      color={isValid ? "#fff" : isDark ? "rgba(255,255,255,0.25)" : "#9ca3af"}
                     />
                     <Text style={{
                       fontSize: 15.5, fontWeight: "700",
-                      color: isValid ? "#fff" : isDark ? "rgba(255,255,255,0.3)" : "#9ca3af",
+                      color: isValid ? "#fff" : isDark ? "rgba(255,255,255,0.25)" : "#9ca3af",
                       fontFamily: "Inter_700Bold",
                     }}>
                       {mode === "login" ? "Sign In" : "Create Account"}
@@ -276,13 +241,13 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Badge */}
-          <View style={{ alignItems: "center", marginTop: 24, flexDirection: "row", justifyContent: "center", gap: 6 }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#22c55e" }} />
-            <Text style={{ fontSize: 12.5, color: isDark ? "rgba(255,255,255,0.3)" : "rgba(99,102,241,0.55)", fontFamily: "Inter_400Regular" }}>
-              Paper trading only — no real money involved
-            </Text>
-          </View>
+          {/* Footer */}
+          <Text style={{
+            textAlign: "center", marginTop: 22,
+            color: labelColor, fontSize: 12.5, fontFamily: "Inter_400Regular",
+          }}>
+            Paper trading only · No real money involved
+          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
