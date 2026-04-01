@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from "react";
-import { Animated, Text, View, TextStyle } from "react-native";
+import { Animated, Text, TextStyle } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import { useLivePrice } from "@/context/LivePricesContext";
 
@@ -10,43 +10,39 @@ interface FlashingPriceProps {
   style?: TextStyle;
 }
 
-function useFlashEffect(value: number, gainColor: string, lossColor: string) {
-  const prevRef = useRef<number | undefined>(undefined);
-  const flashOpacity = useRef(new Animated.Value(0)).current;
-  const [flashColor, setFlashColor] = useState("transparent");
-
-  useEffect(() => {
-    if (prevRef.current === undefined) { prevRef.current = value; return; }
-    if (value !== prevRef.current) {
-      const color = value > prevRef.current ? gainColor + "55" : lossColor + "55";
-      prevRef.current = value;
-      setFlashColor(color);
-      flashOpacity.setValue(1);
-      Animated.timing(flashOpacity, { toValue: 0, duration: 900, useNativeDriver: true }).start();
-    }
-  }, [value]);
-
-  return { flashOpacity, flashColor };
-}
-
 export function FlashingPrice({ value: propValue, symbol, format, style }: FlashingPriceProps) {
   const colors = useColors();
   const livePrice = useLivePrice(symbol);
   const value = livePrice?.ltp ?? propValue;
-  const { flashOpacity, flashColor } = useFlashEffect(value, colors.gain, colors.loss);
+
+  const prevRef = useRef<number | undefined>(undefined);
+  const [flashColor, setFlashColor] = useState<string | undefined>(undefined);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (prevRef.current === undefined) { prevRef.current = value; return; }
+    if (value !== prevRef.current) {
+      const color = value > prevRef.current ? colors.gain : colors.loss;
+      prevRef.current = value;
+      setFlashColor(color);
+      fadeAnim.setValue(1);
+      Animated.timing(fadeAnim, { toValue: 0, duration: 800, useNativeDriver: false }).start(() => {
+        setFlashColor(undefined);
+      });
+    }
+  }, [value]);
 
   const label = format
     ? format(value)
     : "₹" + value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  const baseColor = (style as any)?.color;
+  const animatedColor = flashColor
+    ? fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [baseColor ?? colors.foreground, flashColor] })
+    : baseColor ?? colors.foreground;
+
   return (
-    <View style={{ position: "relative" }}>
-      <Animated.View
-        style={{ position: "absolute", top: -2, left: -4, right: -4, bottom: -2, backgroundColor: flashColor, borderRadius: 5, opacity: flashOpacity }}
-        pointerEvents="none"
-      />
-      <Text style={style}>{label}</Text>
-    </View>
+    <Animated.Text style={[style, { color: animatedColor }]}>{label}</Animated.Text>
   );
 }
 
