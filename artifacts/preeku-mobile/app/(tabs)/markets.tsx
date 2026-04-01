@@ -7,11 +7,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useInfiniteQuery } from "@tanstack/react-query";
+import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
 import { useTradingContext } from "@/context/TradingContext";
 import { FlashingPrice } from "@/components/FlashingPrice";
 import { useLivePrices, useLivePrice } from "@/context/LivePricesContext";
 import { useMarketStatus } from "@/hooks/useMarketStatus";
+import { useMobileWatchlist } from "@/hooks/useMobileWatchlist";
+import { useMobileRecentSearches } from "@/hooks/useMobileRecentSearches";
 
 const INITIAL_SIZE = 20;
 const LOAD_MORE_SIZE = 10;
@@ -22,8 +25,9 @@ interface Stock {
   high: number; low: number; volume: number;
 }
 
-function StockRow({ item, onPress, onBuy, onSell, colors }: {
+function StockRow({ item, onPress, onBuy, onSell, onWatchlist, inWatchlist, colors }: {
   item: Stock; onPress: () => void; onBuy: () => void; onSell: () => void;
+  onWatchlist: () => void; inWatchlist: boolean;
   colors: ReturnType<typeof useColors>;
 }) {
   const live = useLivePrice(item.symbol);
@@ -44,7 +48,7 @@ function StockRow({ item, onPress, onBuy, onSell, colors }: {
         <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" }}>{item.symbol}</Text>
         <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 1 }} numberOfLines={1}>{item.name.split(" ").slice(0, 3).join(" ")}</Text>
       </View>
-      <View style={{ alignItems: "flex-end", marginRight: 10 }}>
+      <View style={{ alignItems: "flex-end", marginRight: 8 }}>
         <FlashingPrice
           value={price}
           symbol={item.symbol}
@@ -57,20 +61,35 @@ function StockRow({ item, onPress, onBuy, onSell, colors }: {
           </Text>
         </View>
       </View>
-      <View style={{ gap: 5 }}>
+
+      {/* Action buttons */}
+      <View style={{ gap: 4 }}>
+        <View style={{ flexDirection: "row", gap: 4 }}>
+          <TouchableOpacity
+            style={{ backgroundColor: colors.gainBg, borderRadius: 6, paddingHorizontal: 9, paddingVertical: 5, borderWidth: 1, borderColor: colors.gain + "40" }}
+            onPress={(e) => { e.stopPropagation?.(); onBuy(); }}
+            activeOpacity={0.7}
+          >
+            <Text style={{ color: colors.gain, fontSize: 11, fontWeight: "700", fontFamily: "Inter_700Bold" }}>BUY</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{ backgroundColor: colors.lossBg, borderRadius: 6, paddingHorizontal: 9, paddingVertical: 5, borderWidth: 1, borderColor: colors.loss + "40" }}
+            onPress={(e) => { e.stopPropagation?.(); onSell(); }}
+            activeOpacity={0.7}
+          >
+            <Text style={{ color: colors.loss, fontSize: 11, fontWeight: "700", fontFamily: "Inter_700Bold" }}>SELL</Text>
+          </TouchableOpacity>
+        </View>
         <TouchableOpacity
-          style={{ backgroundColor: colors.gainBg, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: colors.gain + "40" }}
-          onPress={(e) => { e.stopPropagation?.(); onBuy(); }}
+          onPress={(e) => { e.stopPropagation?.(); onWatchlist(); }}
           activeOpacity={0.7}
+          style={{ alignItems: "center", paddingVertical: 3 }}
         >
-          <Text style={{ color: colors.gain, fontSize: 12, fontWeight: "700", fontFamily: "Inter_700Bold" }}>BUY</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={{ backgroundColor: colors.lossBg, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: colors.loss + "40" }}
-          onPress={(e) => { e.stopPropagation?.(); onSell(); }}
-          activeOpacity={0.7}
-        >
-          <Text style={{ color: colors.loss, fontSize: 12, fontWeight: "700", fontFamily: "Inter_700Bold" }}>SELL</Text>
+          <Ionicons
+            name={inWatchlist ? "bookmark" : "bookmark-outline"}
+            size={18}
+            color={inWatchlist ? colors.primary : colors.mutedForeground}
+          />
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -92,6 +111,8 @@ export default function MarketsScreen() {
   const { openOrderModal } = useTradingContext();
   const { connected, prices } = useLivePrices();
   const { isOpen: marketOpen, label: marketLabel } = useMarketStatus();
+  const { addItem: addToWatchlist, removeItem: removeFromWatchlist, has: inWatchlist } = useMobileWatchlist();
+  const { addRecent } = useMobileRecentSearches();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
@@ -132,6 +153,30 @@ export default function MarketsScreen() {
   const losers = stockList.length - gainers;
   const topInset = Platform.OS === "web" ? 67 : insets.top;
 
+  const handleWatchlist = (stock: Stock) => {
+    Haptics.selectionAsync();
+    if (inWatchlist(stock.symbol)) {
+      removeFromWatchlist(stock.symbol);
+    } else {
+      addToWatchlist({ symbol: stock.symbol, name: stock.name, sector: stock.sector, exchange: stock.exchange });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  };
+
+  const trackAndNavigate = (stock: Stock) => {
+    addRecent({ symbol: stock.symbol, name: stock.name, sector: stock.sector, exchange: stock.exchange });
+    router.push(`/stock/${stock.symbol}`);
+  };
+
+  const trackAndBuy = (stock: Stock) => {
+    addRecent({ symbol: stock.symbol, name: stock.name, sector: stock.sector, exchange: stock.exchange });
+    openOrderModal({ symbol: stock.symbol, name: stock.name, currentPrice: prices[stock.symbol]?.ltp ?? stock.currentPrice }, "BUY");
+  };
+
+  const trackAndSell = (stock: Stock) => {
+    addRecent({ symbol: stock.symbol, name: stock.name, sector: stock.sector, exchange: stock.exchange });
+    openOrderModal({ symbol: stock.symbol, name: stock.name, currentPrice: prices[stock.symbol]?.ltp ?? stock.currentPrice }, "SELL");
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -192,9 +237,11 @@ export default function MarketsScreen() {
           <StockRow
             item={item}
             colors={colors}
-            onPress={() => router.push(`/stock/${item.symbol}`)}
-            onBuy={() => openOrderModal({ symbol: item.symbol, name: item.name, currentPrice: item.currentPrice }, "BUY")}
-            onSell={() => openOrderModal({ symbol: item.symbol, name: item.name, currentPrice: item.currentPrice }, "SELL")}
+            inWatchlist={inWatchlist(item.symbol)}
+            onPress={() => trackAndNavigate(item)}
+            onBuy={() => trackAndBuy(item)}
+            onSell={() => trackAndSell(item)}
+            onWatchlist={() => handleWatchlist(item)}
           />
         )}
         ListFooterComponent={

@@ -9,11 +9,13 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useGetPortfolioSummary, useGetWatchlist, useGetMarketHeatmap, useGetPositions, useGetHoldings } from "@workspace/api-client-react";
+import { useGetPortfolioSummary, useGetMarketHeatmap, useGetPositions, useGetHoldings } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useTradingContext } from "@/context/TradingContext";
 import { FlashingPrice } from "@/components/FlashingPrice";
 import { useLivePrice, useLivePrices } from "@/context/LivePricesContext";
+import { useMobileWatchlist } from "@/hooks/useMobileWatchlist";
+import { useMobileRecentSearches } from "@/hooks/useMobileRecentSearches";
 
 function formatINR(n: number) {
   if (Math.abs(n) >= 1e7) return "₹" + (n / 1e7).toFixed(2) + "Cr";
@@ -25,16 +27,10 @@ function formatPct(n: number | null | undefined) {
   return (n >= 0 ? "+" : "") + n.toFixed(2) + "%";
 }
 
-interface WatchlistItem {
-  id: number; symbol: string; name: string;
-  currentPrice: number; change: number; changePercent: number;
-}
-
 interface HeatmapSector {
   sector: string; changePercent: number;
   stocks: { symbol: string; name: string; changePercent: number; marketCap: number }[];
 }
-
 interface Summary {
   walletBalance: number; currentValue: number; totalPnl: number;
   totalPnlPercent: number; dayPnl: number; dayPnlPercent: number;
@@ -48,30 +44,103 @@ interface PortfolioPosition {
   symbol: string; quantity: number; avgBuyPrice: number; investedValue: number;
 }
 
-function WatchlistRow({ item, colors, onPress }: { item: WatchlistItem; colors: ReturnType<typeof useColors>; onPress: () => void }) {
-  const live = useLivePrice(item.symbol);
-  const price = live?.ltp ?? item.currentPrice;
-  const changePct = live?.changePercent ?? item.changePercent;
+function WatchlistRow({ symbol, name, colors, onPress }: {
+  symbol: string; name: string;
+  colors: ReturnType<typeof useColors>; onPress: () => void;
+}) {
+  const live = useLivePrice(symbol);
+  const price = live?.ltp ?? 0;
+  const changePct = live?.changePercent ?? 0;
   return (
     <TouchableOpacity
-      style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, paddingHorizontal: 16, paddingVertical: 14 }}
+      style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14 }}
       onPress={onPress}
       activeOpacity={0.7}
     >
-      <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 12, flex: 1 }}>
-        <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: colors.primary + "18", alignItems: "center" as const, justifyContent: "center" as const }}>
-          <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "700" as const, fontFamily: "Inter_700Bold" }}>{item.symbol.slice(0, 2)}</Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
+        <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: colors.primary + "18", alignItems: "center", justifyContent: "center" }}>
+          <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "700", fontFamily: "Inter_700Bold" }}>{symbol.slice(0, 2)}</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 15, fontWeight: "700" as const, color: colors.foreground, fontFamily: "Inter_700Bold" }}>{item.symbol}</Text>
-          <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 }} numberOfLines={1}>{item.name}</Text>
+          <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" }}>{symbol}</Text>
+          <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 }} numberOfLines={1}>{name}</Text>
         </View>
       </View>
       <View style={{ alignItems: "flex-end" }}>
-        <FlashingPrice value={price} symbol={item.symbol} style={{ fontSize: 15, fontWeight: "600" as const, color: colors.foreground, fontFamily: "Inter_600SemiBold", textAlign: "right" as const }} />
-        <Text style={{ fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "right" as const, marginTop: 2, color: changePct >= 0 ? colors.gain : colors.loss }}>
-          {formatPct(changePct)}
-        </Text>
+        {price > 0 ? (
+          <>
+            <FlashingPrice value={price} symbol={symbol} style={{ fontSize: 15, fontWeight: "600", color: colors.foreground, fontFamily: "Inter_600SemiBold", textAlign: "right" }} />
+            <Text style={{ fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "right", marginTop: 2, color: changePct >= 0 ? colors.gain : colors.loss }}>
+              {formatPct(changePct)}
+            </Text>
+          </>
+        ) : (
+          <Text style={{ color: colors.mutedForeground, fontSize: 13, fontFamily: "Inter_400Regular" }}>—</Text>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+function RecentRow({ symbol, name, exchange, colors, onPress, onBuy, onSell }: {
+  symbol: string; name: string; exchange: string;
+  colors: ReturnType<typeof useColors>;
+  onPress: () => void; onBuy: () => void; onSell: () => void;
+}) {
+  const live = useLivePrice(symbol);
+  const price = live?.ltp ?? 0;
+  const changePct = live?.changePercent ?? 0;
+  const isUp = changePct >= 0;
+  return (
+    <TouchableOpacity
+      style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12 }}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <View style={{ width: 36, height: 36, borderRadius: 9, backgroundColor: colors.secondary, alignItems: "center", justifyContent: "center", marginRight: 10 }}>
+        <Text style={{ color: colors.mutedForeground, fontSize: 11, fontWeight: "700", fontFamily: "Inter_700Bold" }}>{symbol.slice(0, 2)}</Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Text style={{ fontSize: 14, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" }}>{symbol}</Text>
+          <View style={{ backgroundColor: colors.secondary, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+            <Text style={{ fontSize: 9, color: colors.mutedForeground, fontFamily: "Inter_500Medium", fontWeight: "500" }}>{exchange}</Text>
+          </View>
+        </View>
+        <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 1 }} numberOfLines={1}>{name}</Text>
+      </View>
+      <View style={{ alignItems: "flex-end", marginRight: 10 }}>
+        {price > 0 ? (
+          <>
+            <Text style={{ fontSize: 14, fontWeight: "600", color: colors.foreground, fontFamily: "Inter_600SemiBold" }}>
+              ₹{price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 2, marginTop: 2 }}>
+              <Ionicons name={isUp ? "caret-up" : "caret-down"} size={9} color={isUp ? colors.gain : colors.loss} />
+              <Text style={{ fontSize: 11, color: isUp ? colors.gain : colors.loss, fontFamily: "Inter_500Medium", fontWeight: "500" }}>
+                {Math.abs(changePct).toFixed(2)}%
+              </Text>
+            </View>
+          </>
+        ) : (
+          <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: "Inter_400Regular" }}>—</Text>
+        )}
+      </View>
+      <View style={{ gap: 4 }}>
+        <TouchableOpacity
+          style={{ backgroundColor: colors.gainBg, borderRadius: 5, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: colors.gain + "40" }}
+          onPress={(e) => { e.stopPropagation?.(); onBuy(); }}
+          activeOpacity={0.7}
+        >
+          <Text style={{ color: colors.gain, fontSize: 10, fontWeight: "700", fontFamily: "Inter_700Bold" }}>BUY</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={{ backgroundColor: colors.lossBg, borderRadius: 5, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: colors.loss + "40" }}
+          onPress={(e) => { e.stopPropagation?.(); onSell(); }}
+          activeOpacity={0.7}
+        >
+          <Text style={{ color: colors.loss, fontSize: 10, fontWeight: "700", fontFamily: "Inter_700Bold" }}>SELL</Text>
+        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
@@ -81,7 +150,7 @@ function HeatBlock({ symbol, changePercent, colors }: { symbol: string; changePe
   const bg = changePercent >= 2 ? "#166534" : changePercent >= 0 ? "#14532d" : changePercent >= -2 ? "#7f1d1d" : "#991b1b";
   return (
     <View style={{ backgroundColor: bg, borderRadius: 6, padding: 8, minWidth: 72, alignItems: "center" }}>
-      <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" as const, fontFamily: "Inter_700Bold" }}>{symbol}</Text>
+      <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700", fontFamily: "Inter_700Bold" }}>{symbol}</Text>
       <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 10, fontFamily: "Inter_400Regular", marginTop: 2 }}>{formatPct(changePercent)}</Text>
     </View>
   );
@@ -93,11 +162,13 @@ export default function HomeScreen() {
   const router = useRouter();
   const { openOrderModal } = useTradingContext();
   const { data: summary, refetch: refetchSummary, isLoading } = useGetPortfolioSummary({ query: { refetchInterval: 30000 } });
-  const { data: watchlist, refetch: refetchWatchlist } = useGetWatchlist({ query: { refetchInterval: 15000 } });
   const { data: heatmap } = useGetMarketHeatmap({ query: { refetchInterval: 60000 } });
   const { data: positions } = useGetPositions();
   const { data: holdings } = useGetHoldings();
   const { prices } = useLivePrices();
+
+  const { items: watchlistItems } = useMobileWatchlist();
+  const { recents, removeRecent, clearAll: clearRecents } = useMobileRecentSearches();
 
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [profileName, setProfileName] = useState("Trader");
@@ -126,16 +197,13 @@ export default function HomeScreen() {
   const [moversTab, setMoversTab] = useState<"gainers" | "losers">("gainers");
 
   const s = summary as Summary | undefined;
-  const watchlistItems: WatchlistItem[] = Array.isArray(watchlist) ? watchlist : [];
   const heatmapData: HeatmapSector[] = Array.isArray(heatmap) ? heatmap : [];
   const positionList: PortfolioPosition[] = Array.isArray(positions) ? positions : [];
   const holdingList: PortfolioHolding[] = Array.isArray(holdings) ? holdings : [];
 
   const allMovers = heatmapData.flatMap((sec) =>
     sec.stocks.map((st) => ({
-      symbol: st.symbol,
-      name: st.name,
-      sector: sec.sector,
+      symbol: st.symbol, name: st.name, sector: sec.sector,
       ltp: prices[st.symbol]?.ltp ?? 0,
       chgPct: prices[st.symbol]?.changePercent ?? st.changePercent,
     }))
@@ -146,128 +214,73 @@ export default function HomeScreen() {
   const liveStats = useMemo(() => {
     const totalInvested = s?.totalInvested ?? 0;
     const walletBalance = s?.walletBalance ?? 1000000;
-
-    let liveCurrentValue = 0;
-    let liveDayPnl = 0;
-    let hasLivePrices = false;
-
+    let liveCurrentValue = 0, liveDayPnl = 0, hasLivePrices = false;
     for (const pos of positionList) {
       const ltp = prices[pos.symbol]?.ltp ?? 0;
-      if (ltp > 0) {
-        liveCurrentValue += ltp * pos.quantity;
-        liveDayPnl += (ltp - pos.avgBuyPrice) * pos.quantity;
-        hasLivePrices = true;
-      } else {
-        liveCurrentValue += pos.investedValue;
-      }
+      if (ltp > 0) { liveCurrentValue += ltp * pos.quantity; liveDayPnl += (ltp - pos.avgBuyPrice) * pos.quantity; hasLivePrices = true; }
+      else liveCurrentValue += pos.investedValue;
     }
     for (const h of holdingList) {
       const tick = prices[h.symbol];
       const ltp = tick?.ltp ?? 0;
-      if (ltp > 0) {
-        liveCurrentValue += ltp * h.quantity;
-        const prevClose = tick.close > 0 ? tick.close : h.avgBuyPrice;
-        liveDayPnl += (ltp - prevClose) * h.quantity;
-        hasLivePrices = true;
-      } else {
-        liveCurrentValue += h.investedValue;
-      }
+      if (ltp > 0) { liveCurrentValue += ltp * h.quantity; const prevClose = tick.close > 0 ? tick.close : h.avgBuyPrice; liveDayPnl += (ltp - prevClose) * h.quantity; hasLivePrices = true; }
+      else liveCurrentValue += h.investedValue;
     }
-
     const hasPositions = positionList.length > 0 || holdingList.length > 0;
     const currentValue = hasPositions ? liveCurrentValue : (s?.currentValue ?? 0);
     const totalPnl = hasPositions ? currentValue - totalInvested : (s?.totalPnl ?? 0);
     const totalPnlPercent = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
     const dayPnl = hasPositions && hasLivePrices ? liveDayPnl : (s?.dayPnl ?? 0);
-
     return { currentValue, totalPnl, totalPnlPercent, dayPnl, totalInvested, walletBalance };
   }, [prices, positionList, holdingList, s]);
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
-
-  const onRefresh = async () => {
-    await Promise.all([refetchSummary(), refetchWatchlist()]);
-  };
+  const onRefresh = async () => { await refetchSummary(); };
 
   const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: {
-      paddingTop: topInset + 12,
-      paddingHorizontal: 20,
-      paddingBottom: 16,
-      flexDirection: "row" as const,
-      alignItems: "center" as const,
-      justifyContent: "space-between" as const,
-    },
-    appName: { fontSize: 22, fontWeight: "700" as const, color: colors.foreground, fontFamily: "Inter_700Bold" },
-    avatarBtn: { width: 36, height: 36, borderRadius: 18, overflow: "hidden" as const, borderWidth: 2, borderColor: colors.primary + "50" },
-    avatarImg: { width: 36, height: 36 },
-    avatarPlaceholder: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary + "25", alignItems: "center" as const, justifyContent: "center" as const },
-    avatarInitials: { color: colors.primary, fontSize: 13, fontWeight: "700" as const, fontFamily: "Inter_700Bold" },
-    portfolioCard: {
-      marginHorizontal: 16, marginBottom: 16,
-      backgroundColor: colors.card,
-      borderRadius: 16, padding: 20,
-      borderWidth: 1, borderColor: colors.border,
-    },
-    portfolioLabel: { fontSize: 11, color: colors.mutedForeground, letterSpacing: 1, fontFamily: "Inter_500Medium", fontWeight: "500" as const },
-    portfolioValue: { fontSize: 36, fontWeight: "700" as const, color: colors.foreground, fontFamily: "Inter_700Bold", marginTop: 4 },
-    pnlRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: 6, marginTop: 6 },
-    pnlChip: { flexDirection: "row" as const, alignItems: "center" as const, gap: 4, backgroundColor: "transparent", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-    statsRow: { flexDirection: "row" as const, gap: 10, marginTop: 16 },
-    statBox: { flex: 1, backgroundColor: colors.secondary, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: colors.border },
-    statLabel: { fontSize: 10, color: colors.mutedForeground, letterSpacing: 0.5, fontFamily: "Inter_400Regular" },
-    statValue: { fontSize: 15, fontWeight: "700" as const, color: colors.foreground, fontFamily: "Inter_700Bold", marginTop: 4 },
+    header: { paddingTop: topInset + 12, paddingHorizontal: 20, paddingBottom: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+    portfolioCard: { marginHorizontal: 16, marginBottom: 16, backgroundColor: colors.card, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: colors.border },
+    portfolioLabel: { fontSize: 11, color: colors.mutedForeground, letterSpacing: 1, fontFamily: "Inter_500Medium", fontWeight: "500" },
+    portfolioValue: { fontSize: 36, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold", marginTop: 4 },
+    pnlRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 },
+    pnlChip: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
     section: { marginHorizontal: 16, marginBottom: 16 },
-    sectionHeader: { flexDirection: "row" as const, justifyContent: "space-between" as const, alignItems: "center" as const, marginBottom: 12 },
-    sectionTitle: { fontSize: 16, fontWeight: "700" as const, color: colors.foreground, fontFamily: "Inter_700Bold" },
-    watchlistCard: { backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.border, overflow: "hidden" as const },
-    watchlistRow: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, paddingHorizontal: 16, paddingVertical: 14 },
-    watchlistSym: { fontSize: 15, fontWeight: "700" as const, color: colors.foreground, fontFamily: "Inter_700Bold" },
-    watchlistName: { fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 },
-    watchlistPrice: { fontSize: 15, fontWeight: "600" as const, color: colors.foreground, fontFamily: "Inter_600SemiBold", textAlign: "right" as const },
-    watchlistChg: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "right" as const, marginTop: 2 },
+    sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
+    sectionTitle: { fontSize: 16, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" },
+    card: { backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
     separator: { height: 1, backgroundColor: colors.border, marginHorizontal: 16 },
-    heatRow: { flexDirection: "row" as const, flexWrap: "wrap" as const, gap: 6 },
-    heatSector: { marginBottom: 12 },
-    heatSectorLabel: { fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_500Medium", fontWeight: "500" as const, marginBottom: 6 },
-    emptyText: { color: colors.mutedForeground, textAlign: "center" as const, paddingVertical: 24, fontFamily: "Inter_400Regular" },
-    moversCard: { backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.border, overflow: "hidden" as const },
-    moversTabs: { flexDirection: "row" as const, borderBottomWidth: 1, borderColor: colors.border },
-    moversTab: { flex: 1, paddingVertical: 12, flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 6 },
-    moversTabText: { fontSize: 13, fontWeight: "700" as const, fontFamily: "Inter_700Bold" },
-    moverRow: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderColor: colors.border + "60" },
-    moverRank: { fontSize: 11, fontWeight: "700" as const, fontFamily: "Inter_700Bold", color: colors.mutedForeground, width: 20 },
-    moverSymbol: { fontSize: 14, fontWeight: "700" as const, fontFamily: "Inter_700Bold", color: colors.foreground },
+    emptyText: { color: colors.mutedForeground, textAlign: "center", paddingVertical: 20, fontFamily: "Inter_400Regular", fontSize: 13 },
+    moversCard: { backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
+    moversTabs: { flexDirection: "row", borderBottomWidth: 1, borderColor: colors.border },
+    moversTab: { flex: 1, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+    moverRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderColor: colors.border + "60" },
+    moverRank: { fontSize: 11, fontWeight: "700", fontFamily: "Inter_700Bold", color: colors.mutedForeground, width: 20 },
+    moverSymbol: { fontSize: 14, fontWeight: "700", fontFamily: "Inter_700Bold", color: colors.foreground },
     moverSector: { fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground, marginTop: 1 },
-    moverPrice: { fontSize: 14, fontWeight: "600" as const, fontFamily: "Inter_600SemiBold", color: colors.foreground, textAlign: "right" as const },
-    moverChgChip: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, marginTop: 3, alignSelf: "flex-end" as const },
-    moverChgText: { fontSize: 12, fontWeight: "700" as const, fontFamily: "Inter_700Bold" },
+    moverPrice: { fontSize: 14, fontWeight: "600", fontFamily: "Inter_600SemiBold", color: colors.foreground, textAlign: "right" },
+    moverChgChip: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, marginTop: 3, alignSelf: "flex-end" },
+    moverChgText: { fontSize: 12, fontWeight: "700", fontFamily: "Inter_700Bold" },
+    heatRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+    heatSector: { marginBottom: 12 },
+    heatSectorLabel: { fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_500Medium", fontWeight: "500", marginBottom: 6 },
   });
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Image
-          source={require("@/assets/images/icon.png")}
-          style={{ width: 36, height: 36, borderRadius: 8 }}
-          resizeMode="contain"
-        />
+        <Image source={require("@/assets/images/icon.png")} style={{ width: 36, height: 36, borderRadius: 8 }} resizeMode="contain" />
         <View style={{ flex: 1, marginHorizontal: 12 }}>
           <Text style={{ fontSize: 15, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
             Hello, <Text style={{ color: colors.foreground, fontFamily: "Inter_700Bold", fontWeight: "700" }}>{profileName.split(" ")[0]}</Text> 👋
           </Text>
         </View>
-        <TouchableOpacity
-          onPress={() => router.push("/(tabs)/profile")}
-          activeOpacity={0.75}
-          style={styles.avatarBtn}
-        >
+        <TouchableOpacity onPress={() => router.push("/(tabs)/profile")} activeOpacity={0.75} style={{ width: 36, height: 36, borderRadius: 18, overflow: "hidden", borderWidth: 2, borderColor: colors.primary + "50" }}>
           {avatarUri ? (
-            <Image source={{ uri: avatarUri }} style={styles.avatarImg} />
+            <Image source={{ uri: avatarUri }} style={{ width: 36, height: 36 }} />
           ) : (
-            <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarInitials}>
+            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary + "25", alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ color: colors.primary, fontSize: 13, fontWeight: "700", fontFamily: "Inter_700Bold" }}>
                 {profileName.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase()}
               </Text>
             </View>
@@ -277,11 +290,11 @@ export default function HomeScreen() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 100 : 100 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
-        {/* Market Indices — NIFTY 50 & SENSEX */}
-        <View style={{ flexDirection: "row" as const, marginHorizontal: 16, marginBottom: 12, gap: 10 }}>
+        {/* Market Indices */}
+        <View style={{ flexDirection: "row", marginHorizontal: 16, marginBottom: 12, gap: 10 }}>
           {(indicesData && indicesData.length > 0 ? indicesData : [
             { name: "NIFTY 50", value: 0, change: 0, changePercent: 0 },
             { name: "SENSEX", value: 0, change: 0, changePercent: 0 },
@@ -290,16 +303,16 @@ export default function HomeScreen() {
             const clr = idx.value === 0 ? colors.mutedForeground : up ? colors.gain : colors.loss;
             return (
               <View key={idx.name} style={{ flex: 1, backgroundColor: colors.card, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: clr + "30" }}>
-                <View style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, marginBottom: 4 }}>
-                  <Text style={{ fontSize: 11, fontWeight: "700" as const, color: colors.mutedForeground, fontFamily: "Inter_700Bold", letterSpacing: 0.5 }}>{idx.name}</Text>
-                  <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 2, backgroundColor: clr + "15", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: colors.mutedForeground, fontFamily: "Inter_700Bold", letterSpacing: 0.5 }}>{idx.name}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 2, backgroundColor: clr + "15", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
                     <Ionicons name={up ? "trending-up" : "trending-down"} size={10} color={clr} />
-                    <Text style={{ fontSize: 10, color: clr, fontFamily: "Inter_600SemiBold", fontWeight: "600" as const }}>
+                    <Text style={{ fontSize: 10, color: clr, fontFamily: "Inter_600SemiBold", fontWeight: "600" }}>
                       {idx.value === 0 ? "—" : `${up ? "+" : ""}${idx.changePercent.toFixed(2)}%`}
                     </Text>
                   </View>
                 </View>
-                <Text style={{ fontSize: 18, fontWeight: "700" as const, color: colors.foreground, fontFamily: "Inter_700Bold" }}>
+                <Text style={{ fontSize: 18, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" }}>
                   {idx.value === 0 ? "—" : idx.value.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
                 </Text>
                 <Text style={{ fontSize: 11, color: clr, fontFamily: "Inter_400Regular", marginTop: 2 }}>
@@ -310,7 +323,7 @@ export default function HomeScreen() {
           })}
         </View>
 
-        {/* Portfolio Card — live prices recalculate currentValue, P&L every tick */}
+        {/* Portfolio Card */}
         <View style={styles.portfolioCard}>
           <Text style={styles.portfolioLabel}>PORTFOLIO VALUE</Text>
           <FlashingPrice
@@ -324,27 +337,74 @@ export default function HomeScreen() {
               <FlashingPrice
                 value={liveStats.totalPnl}
                 format={(v) => `${formatINR(v)} (${formatPct(liveStats.totalPnlPercent)})`}
-                style={{ color: liveStats.totalPnl >= 0 ? colors.gain : colors.loss, fontSize: 13, fontFamily: "Inter_600SemiBold", fontWeight: "600" as const }}
+                style={{ color: liveStats.totalPnl >= 0 ? colors.gain : colors.loss, fontSize: 13, fontFamily: "Inter_600SemiBold", fontWeight: "600" }}
               />
             </View>
             <Text style={{ color: colors.mutedForeground, fontSize: 11, fontFamily: "Inter_400Regular" }}>Total P&L</Text>
           </View>
         </View>
 
-        {/* Watchlist */}
+        {/* ── Recent Searches ── */}
+        {recents.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Ionicons name="time-outline" size={15} color={colors.mutedForeground} />
+                <Text style={styles.sectionTitle}>Recent Searches</Text>
+              </View>
+              <TouchableOpacity onPress={clearRecents} activeOpacity={0.7}>
+                <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>Clear all</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.card}>
+              {recents.map((stock, idx) => (
+                <React.Fragment key={stock.symbol}>
+                  <RecentRow
+                    symbol={stock.symbol}
+                    name={stock.name}
+                    exchange={stock.exchange}
+                    colors={colors}
+                    onPress={() => router.push(`/stock/${stock.symbol}`)}
+                    onBuy={() => openOrderModal({ symbol: stock.symbol, name: stock.name, currentPrice: prices[stock.symbol]?.ltp ?? 0 }, "BUY")}
+                    onSell={() => openOrderModal({ symbol: stock.symbol, name: stock.name, currentPrice: prices[stock.symbol]?.ltp ?? 0 }, "SELL")}
+                  />
+                  {idx < recents.length - 1 && <View style={styles.separator} />}
+                </React.Fragment>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* ── Watchlist ── */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Watchlist</Text>
-            <Ionicons name="star" size={16} color={colors.primary} />
+            <TouchableOpacity onPress={() => router.push("/(tabs)/markets")} activeOpacity={0.7}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Ionicons name="add" size={15} color={colors.primary} />
+                <Text style={{ fontSize: 12, color: colors.primary, fontFamily: "Inter_500Medium", fontWeight: "500" }}>Add Stocks</Text>
+              </View>
+            </TouchableOpacity>
           </View>
           {watchlistItems.length === 0 ? (
-            <Text style={styles.emptyText}>No stocks in watchlist</Text>
+            <View style={[styles.card, { paddingVertical: 10 }]}>
+              <Text style={styles.emptyText}>No stocks in watchlist</Text>
+              <TouchableOpacity
+                onPress={() => router.push("/(tabs)/markets")}
+                activeOpacity={0.7}
+                style={{ alignSelf: "center", marginBottom: 14, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.primary + "18", borderRadius: 10, paddingHorizontal: 16, paddingVertical: 8, borderWidth: 1, borderColor: colors.primary + "40" }}
+              >
+                <Ionicons name="bookmark-outline" size={14} color={colors.primary} />
+                <Text style={{ color: colors.primary, fontSize: 13, fontFamily: "Inter_600SemiBold", fontWeight: "600" }}>Browse Markets</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
-            <View style={styles.watchlistCard}>
+            <View style={styles.card}>
               {watchlistItems.map((item, idx) => (
                 <React.Fragment key={item.symbol}>
                   <WatchlistRow
-                    item={item}
+                    symbol={item.symbol}
+                    name={item.name}
                     colors={colors}
                     onPress={() => router.push(`/stock/${item.symbol}`)}
                   />
@@ -362,52 +422,39 @@ export default function HomeScreen() {
               <Text style={styles.sectionTitle}>Top Movers</Text>
             </View>
             <View style={styles.moversCard}>
-              {/* Tabs */}
               <View style={styles.moversTabs}>
                 <TouchableOpacity
                   style={[styles.moversTab, { borderBottomWidth: 2, borderBottomColor: moversTab === "gainers" ? "#22c55e" : "transparent", backgroundColor: moversTab === "gainers" ? "rgba(34,197,94,0.06)" : "transparent" }]}
-                  onPress={() => setMoversTab("gainers")}
-                  activeOpacity={0.7}
+                  onPress={() => setMoversTab("gainers")} activeOpacity={0.7}
                 >
                   <Ionicons name="trending-up" size={14} color={moversTab === "gainers" ? "#4ade80" : colors.mutedForeground} />
-                  <Text style={[styles.moversTabText, { color: moversTab === "gainers" ? "#4ade80" : colors.mutedForeground }]}>
-                    Top Gainers
-                  </Text>
+                  <Text style={{ fontSize: 13, fontWeight: "700", fontFamily: "Inter_700Bold", color: moversTab === "gainers" ? "#4ade80" : colors.mutedForeground }}>Top Gainers</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.moversTab, { borderBottomWidth: 2, borderBottomColor: moversTab === "losers" ? "#ef4444" : "transparent", backgroundColor: moversTab === "losers" ? "rgba(239,68,68,0.06)" : "transparent" }]}
-                  onPress={() => setMoversTab("losers")}
-                  activeOpacity={0.7}
+                  onPress={() => setMoversTab("losers")} activeOpacity={0.7}
                 >
                   <Ionicons name="trending-down" size={14} color={moversTab === "losers" ? "#f87171" : colors.mutedForeground} />
-                  <Text style={[styles.moversTabText, { color: moversTab === "losers" ? "#f87171" : colors.mutedForeground }]}>
-                    Top Losers
-                  </Text>
+                  <Text style={{ fontSize: 13, fontWeight: "700", fontFamily: "Inter_700Bold", color: moversTab === "losers" ? "#f87171" : colors.mutedForeground }}>Top Losers</Text>
                 </TouchableOpacity>
               </View>
-
-              {/* Rows */}
               {(moversTab === "gainers" ? topGainers : topLosers).map((stock, idx) => {
                 const isGainer = moversTab === "gainers";
                 const color = isGainer ? "#4ade80" : "#f87171";
                 const bgColor = isGainer ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)";
                 return (
                   <View key={stock.symbol} style={[styles.moverRow, idx === (moversTab === "gainers" ? topGainers : topLosers).length - 1 && { borderBottomWidth: 0 }]}>
-                    <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 10, flex: 1 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
                       <Text style={styles.moverRank}>#{idx + 1}</Text>
                       <View>
                         <Text style={styles.moverSymbol}>{stock.symbol}</Text>
                         <Text style={styles.moverSector}>{stock.sector}</Text>
                       </View>
                     </View>
-                    <View style={{ alignItems: "flex-end" as const }}>
-                      <Text style={styles.moverPrice}>
-                        {stock.ltp > 0 ? `₹${stock.ltp.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
-                      </Text>
+                    <View style={{ alignItems: "flex-end" }}>
+                      <Text style={styles.moverPrice}>{stock.ltp > 0 ? `₹${stock.ltp.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}</Text>
                       <View style={[styles.moverChgChip, { backgroundColor: bgColor }]}>
-                        <Text style={[styles.moverChgText, { color }]}>
-                          {stock.chgPct >= 0 ? "+" : ""}{stock.chgPct.toFixed(2)}%
-                        </Text>
+                        <Text style={[styles.moverChgText, { color }]}>{stock.chgPct >= 0 ? "+" : ""}{stock.chgPct.toFixed(2)}%</Text>
                       </View>
                     </View>
                   </View>
