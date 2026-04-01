@@ -1,11 +1,14 @@
 import { useState, useRef } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { formatINR, formatPercent, pnlClass } from "@/lib/format";
 import { useTradingContext } from "@/context/TradingContext";
 import { useLivePrices } from "@/context/LivePricesContext";
 import { useMarketStatus } from "@/hooks/useMarketStatus";
-import { Search, TrendingUp, TrendingDown, Loader2 } from "lucide-react";
+import { useAddToWatchlist, useGetWatchlist, getGetWatchlistQueryKey } from "@workspace/api-client-react";
+import { useRecentSearches } from "@/hooks/useRecentSearches";
+import { Search, TrendingUp, TrendingDown, Loader2, Bookmark, BookmarkCheck } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 
 const INITIAL_SIZE = 20;
 const LOAD_MORE_SIZE = 10;
@@ -27,9 +30,19 @@ export default function Markets() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<"gainers" | "losers" | null>(null);
+  const [pendingWatchlist, setPendingWatchlist] = useState<Set<string>>(new Set());
   const { openOrderWindow } = useTradingContext();
   const { prices } = useLivePrices();
   const { isOpen: marketOpen, label: marketLabel } = useMarketStatus();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { addRecent } = useRecentSearches();
+
+  const addToWatchlist = useAddToWatchlist();
+  const { data: watchlistData } = useGetWatchlist();
+  const watchlistSymbols = new Set(
+    Array.isArray(watchlistData) ? watchlistData.map((w: { symbol: string }) => w.symbol) : []
+  );
 
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleSearch = (value: string) => {
@@ -38,6 +51,22 @@ export default function Markets() {
     debounceTimer.current = setTimeout(() => setDebouncedSearch(value), 350);
   };
 
+  const handleAddToWatchlist = (stock: Stock) => {
+    if (watchlistSymbols.has(stock.symbol) || pendingWatchlist.has(stock.symbol)) return;
+    setPendingWatchlist((prev) => new Set(prev).add(stock.symbol));
+    addToWatchlist.mutate({ data: { symbol: stock.symbol } }, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetWatchlistQueryKey() });
+        toast({ title: "Added to Watchlist", description: `${stock.symbol} added to your watchlist` });
+      },
+      onError: () => {
+        toast({ title: "Error", description: "Could not add to watchlist", variant: "destructive" });
+      },
+      onSettled: () => {
+        setPendingWatchlist((prev) => { const s = new Set(prev); s.delete(stock.symbol); return s; });
+      }
+    });
+  };
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isFetching } = useInfiniteQuery<Stock[]>({
     queryKey: ["stocks-infinite", debouncedSearch],
@@ -70,6 +99,11 @@ export default function Markets() {
 
   const toggleFilter = (f: "gainers" | "losers") => setActiveFilter((prev) => (prev === f ? null : f));
 
+  const trackAndOpen = (stock: Stock, side: "BUY" | "SELL") => {
+    addRecent({ symbol: stock.symbol, name: stock.name, sector: stock.sector, exchange: stock.exchange, viewedAt: Date.now() });
+    openOrderWindow({ symbol: stock.symbol, name: stock.name, currentPrice: prices[stock.symbol]?.ltp ?? stock.currentPrice }, side);
+  };
+
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-5">
       <div className="flex items-center justify-between">
@@ -101,17 +135,12 @@ export default function Markets() {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        {/* Gainers filter */}
         <button
           type="button"
           onClick={() => toggleFilter("gainers")}
           style={{
-            borderRadius: 10,
-            padding: "12px 16px",
-            textAlign: "center",
-            border: "2px solid",
-            cursor: "pointer",
-            transition: "all 0.15s ease",
+            borderRadius: 10, padding: "12px 16px", textAlign: "center", border: "2px solid",
+            cursor: "pointer", transition: "all 0.15s ease",
             background: activeFilter === "gainers" ? "rgba(34,197,94,0.18)" : "var(--card)",
             borderColor: activeFilter === "gainers" ? "#22c55e" : "var(--border)",
             boxShadow: activeFilter === "gainers" ? "0 0 0 3px rgba(34,197,94,0.25)" : "none",
@@ -126,17 +155,12 @@ export default function Markets() {
           </div>
         </button>
 
-        {/* Losers filter */}
         <button
           type="button"
           onClick={() => toggleFilter("losers")}
           style={{
-            borderRadius: 10,
-            padding: "12px 16px",
-            textAlign: "center",
-            border: "2px solid",
-            cursor: "pointer",
-            transition: "all 0.15s ease",
+            borderRadius: 10, padding: "12px 16px", textAlign: "center", border: "2px solid",
+            cursor: "pointer", transition: "all 0.15s ease",
             background: activeFilter === "losers" ? "rgba(239,68,68,0.18)" : "var(--card)",
             borderColor: activeFilter === "losers" ? "#ef4444" : "var(--border)",
             boxShadow: activeFilter === "losers" ? "0 0 0 3px rgba(239,68,68,0.25)" : "none",
@@ -169,8 +193,15 @@ export default function Markets() {
               const ltp = live?.ltp ?? stock.currentPrice;
               const chg = live?.change ?? stock.change;
               const chgPct = live?.changePercent ?? stock.changePercent;
+              const inWatchlist = watchlistSymbols.has(stock.symbol);
+              const isPending = pendingWatchlist.has(stock.symbol);
               return (
-                <tr key={stock.symbol} className="border-b border-border/50 hover:bg-accent/30 transition-colors" data-testid={`market-row-${stock.symbol}`}>
+                <tr
+                  key={stock.symbol}
+                  className="border-b border-border/50 hover:bg-accent/30 transition-colors"
+                  data-testid={`market-row-${stock.symbol}`}
+                  onClick={() => addRecent({ symbol: stock.symbol, name: stock.name, sector: stock.sector, exchange: stock.exchange, viewedAt: Date.now() })}
+                >
                   <td className="py-3 px-4">
                     <div className="font-semibold text-foreground">{stock.symbol}</div>
                     <div className="text-muted-foreground text-xs">{stock.sector}</div>
@@ -196,18 +227,36 @@ export default function Markets() {
                   <td className="py-3 px-4 text-right font-mono text-muted-foreground text-xs">
                     {(live?.volume ?? stock.volume) > 0 ? (live?.volume ?? stock.volume).toLocaleString("en-IN") : "—"}
                   </td>
-                  <td className="py-3 px-4 text-center">
-                    <div className="flex gap-1.5 justify-center">
+                  <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex gap-1.5 justify-center items-center">
                       <button
-                        onClick={() => openOrderWindow({ symbol: stock.symbol, name: stock.name, currentPrice: ltp }, "BUY")}
+                        onClick={() => trackAndOpen(stock, "BUY")}
                         data-testid={`btn-buy-${stock.symbol}`}
                         className="px-3 py-1 text-xs font-semibold bg-green-500/15 text-green-400 border border-green-500/30 rounded hover:bg-green-500/25 transition-colors"
                       >BUY</button>
                       <button
-                        onClick={() => openOrderWindow({ symbol: stock.symbol, name: stock.name, currentPrice: ltp }, "SELL")}
+                        onClick={() => trackAndOpen(stock, "SELL")}
                         data-testid={`btn-sell-${stock.symbol}`}
                         className="px-3 py-1 text-xs font-semibold bg-red-500/15 text-red-400 border border-red-500/30 rounded hover:bg-red-500/25 transition-colors"
                       >SELL</button>
+                      <button
+                        onClick={() => handleAddToWatchlist(stock)}
+                        disabled={inWatchlist || isPending}
+                        data-testid={`btn-watchlist-${stock.symbol}`}
+                        title={inWatchlist ? "Already in watchlist" : "Add to Watchlist"}
+                        className={`p-1.5 rounded transition-colors ${
+                          inWatchlist
+                            ? "text-primary cursor-default"
+                            : "text-muted-foreground hover:text-primary hover:bg-primary/10"
+                        }`}
+                      >
+                        {inWatchlist
+                          ? <BookmarkCheck className="w-4 h-4" />
+                          : isPending
+                          ? <Loader2 className="w-4 h-4 animate-spin" />
+                          : <Bookmark className="w-4 h-4" />
+                        }
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -233,7 +282,6 @@ export default function Markets() {
           </tbody>
         </table>
 
-        {/* Load More footer */}
         <div className="flex items-center justify-center p-4">
           {isFetchingNextPage ? (
             <div className="flex items-center gap-2 text-muted-foreground text-sm">

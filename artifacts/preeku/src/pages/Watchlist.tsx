@@ -3,7 +3,8 @@ import { useGetWatchlist, useAddToWatchlist, useRemoveFromWatchlist, getGetWatch
 import { formatINR, formatPercent, pnlClass } from "@/lib/format";
 import { useTradingContext } from "@/context/TradingContext";
 import { useLivePrices } from "@/context/LivePricesContext";
-import { Plus, Trash2, BookMarked } from "lucide-react";
+import { useRecentSearches } from "@/hooks/useRecentSearches";
+import { Plus, Trash2, BookMarked, Clock, X, TrendingUp, TrendingDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
@@ -22,17 +23,20 @@ export default function Watchlist() {
   const { openOrderWindow } = useTradingContext();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-
   const { prices } = useLivePrices();
-  const items: WatchlistItem[] = Array.isArray(watchlist) ? watchlist : [];
+  const { recents, removeRecent, clearAll } = useRecentSearches();
 
-  const handleAdd = () => {
-    if (!newSymbol.trim()) return;
-    addToWatchlist.mutate({ data: { symbol: newSymbol.toUpperCase() } }, {
+  const items: WatchlistItem[] = Array.isArray(watchlist) ? watchlist : [];
+  const watchlistSymbols = new Set(items.map((i) => i.symbol));
+
+  const handleAdd = (sym?: string) => {
+    const symbol = (sym ?? newSymbol).trim().toUpperCase();
+    if (!symbol) return;
+    addToWatchlist.mutate({ data: { symbol } }, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getGetWatchlistQueryKey() });
-        setNewSymbol("");
-        toast({ title: "Added to Watchlist", description: `${newSymbol.toUpperCase()} added` });
+        if (!sym) setNewSymbol("");
+        toast({ title: "Added to Watchlist", description: `${symbol} added` });
       },
       onError: () => {
         toast({ title: "Error", description: "Stock not found or already in watchlist", variant: "destructive" });
@@ -68,17 +72,97 @@ export default function Watchlist() {
           className="bg-card border-border text-foreground font-mono uppercase placeholder:normal-case placeholder:font-normal"
           data-testid="input-add-watchlist"
         />
-        <Button onClick={handleAdd} disabled={addToWatchlist.isPending} data-testid="btn-add-watchlist" className="shrink-0">
+        <Button onClick={() => handleAdd()} disabled={addToWatchlist.isPending} data-testid="btn-add-watchlist" className="shrink-0">
           <Plus className="w-4 h-4 mr-1" />
           Add
         </Button>
       </div>
 
+      {/* ── Recent Searches ── */}
+      {recents.length > 0 && (
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm font-semibold text-foreground">Recently Searched</span>
+            </div>
+            <button
+              onClick={clearAll}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Clear all
+            </button>
+          </div>
+          <div className="divide-y divide-border/50">
+            {recents.map((stock) => {
+              const live = prices[stock.symbol];
+              const ltp = live?.ltp ?? 0;
+              const chg = live?.change ?? 0;
+              const chgPct = live?.changePercent ?? 0;
+              const inWatchlist = watchlistSymbols.has(stock.symbol);
+              return (
+                <div
+                  key={stock.symbol}
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-accent/20 transition-colors group"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-foreground text-sm">{stock.symbol}</span>
+                      <span className="text-xs bg-secondary text-muted-foreground px-1.5 py-0.5 rounded">{stock.exchange}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate mt-0.5">{stock.name}</div>
+                  </div>
+
+                  <div className="text-right min-w-[90px]">
+                    <div className="font-mono font-semibold text-sm text-foreground">
+                      {ltp > 0 ? formatINR(ltp) : <span className="text-muted-foreground">—</span>}
+                    </div>
+                    {ltp > 0 && (
+                      <div className={`text-xs font-mono flex items-center justify-end gap-0.5 ${pnlClass(chgPct)}`}>
+                        {chgPct >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                        {formatPercent(chgPct)}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 ml-2">
+                    <button
+                      onClick={() => openOrderWindow({ symbol: stock.symbol, name: stock.name, currentPrice: ltp }, "BUY")}
+                      className="px-2 py-1 text-xs font-semibold bg-green-500/15 text-green-400 border border-green-500/30 rounded hover:bg-green-500/25 transition-colors"
+                    >BUY</button>
+                    <button
+                      onClick={() => openOrderWindow({ symbol: stock.symbol, name: stock.name, currentPrice: ltp }, "SELL")}
+                      className="px-2 py-1 text-xs font-semibold bg-red-500/15 text-red-400 border border-red-500/30 rounded hover:bg-red-500/25 transition-colors"
+                    >SELL</button>
+                    {!inWatchlist && (
+                      <button
+                        onClick={() => handleAdd(stock.symbol)}
+                        title="Add to Watchlist"
+                        className="px-2 py-1 text-xs font-semibold bg-primary/10 text-primary border border-primary/30 rounded hover:bg-primary/20 transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => removeRecent(stock.symbol)}
+                      className="p-1 rounded text-muted-foreground hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Watchlist ── */}
       {items.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground bg-card border border-border rounded-xl">
           <BookMarked className="w-12 h-12 mx-auto mb-3 opacity-30" />
           <p className="font-medium">Your watchlist is empty</p>
-          <p className="text-sm mt-1">Add stocks above to start tracking them</p>
+          <p className="text-sm mt-1">Add stocks above or use the bookmark icon in Markets</p>
         </div>
       ) : (
         <div className="bg-card border border-border rounded-xl overflow-hidden">
