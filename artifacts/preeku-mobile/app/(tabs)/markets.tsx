@@ -5,6 +5,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useListStocks, getListStocksQueryKey } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useTradingContext } from "@/context/TradingContext";
@@ -19,10 +20,14 @@ function formatINR(n: number) {
   return "₹" + n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function StockRow({ item, onBuy, onSell, colors }: { item: Stock; onBuy: () => void; onSell: () => void; colors: ReturnType<typeof useColors> }) {
+function StockRow({ item, onPress, onBuy, onSell, colors }: { item: Stock; onPress: () => void; onBuy: () => void; onSell: () => void; colors: ReturnType<typeof useColors> }) {
   const isUp = item.changePercent >= 0;
   return (
-    <View style={{ flexDirection: "row" as const, alignItems: "center" as const, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: colors.border }}>
+    <TouchableOpacity
+      activeOpacity={0.75}
+      onPress={onPress}
+      style={{ flexDirection: "row" as const, alignItems: "center" as const, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: colors.border }}
+    >
       {/* Avatar */}
       <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: colors.primary + "18", alignItems: "center" as const, justifyContent: "center" as const, marginRight: 12 }}>
         <Text style={{ color: colors.primary, fontSize: 13, fontWeight: "700" as const, fontFamily: "Inter_700Bold" }}>{item.symbol.slice(0, 2)}</Text>
@@ -44,30 +49,31 @@ function StockRow({ item, onBuy, onSell, colors }: { item: Stock; onBuy: () => v
           </Text>
         </View>
       </View>
-      {/* Buy/Sell */}
+      {/* Buy/Sell quick buttons */}
       <View style={{ gap: 5 }}>
         <TouchableOpacity
           style={{ backgroundColor: colors.gainBg, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: colors.gain + "40" }}
-          onPress={onBuy}
+          onPress={(e) => { e.stopPropagation?.(); onBuy(); }}
           activeOpacity={0.7}
         >
           <Text style={{ color: colors.gain, fontSize: 12, fontWeight: "700" as const, fontFamily: "Inter_700Bold" }}>BUY</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={{ backgroundColor: colors.lossBg, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: colors.loss + "40" }}
-          onPress={onSell}
+          onPress={(e) => { e.stopPropagation?.(); onSell(); }}
           activeOpacity={0.7}
         >
           <Text style={{ color: colors.loss, fontSize: 12, fontWeight: "700" as const, fontFamily: "Inter_700Bold" }}>SELL</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
 export default function MarketsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { openOrderModal } = useTradingContext();
   const [search, setSearch] = useState("");
   const params = search.trim() ? { search: search.trim() } : undefined;
@@ -154,6 +160,7 @@ export default function MarketsScreen() {
           <StockRow
             item={item}
             colors={colors}
+            onPress={() => router.push(`/stock/${item.symbol}`)}
             onBuy={() => openOrderModal({ symbol: item.symbol, name: item.name, currentPrice: item.currentPrice }, "BUY")}
             onSell={() => openOrderModal({ symbol: item.symbol, name: item.name, currentPrice: item.currentPrice }, "SELL")}
           />

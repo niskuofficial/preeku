@@ -5,6 +5,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useGetPortfolioSummary, useGetWatchlist, useGetMarketHeatmap } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useTradingContext } from "@/context/TradingContext";
@@ -47,6 +48,7 @@ function HeatBlock({ symbol, changePercent, colors }: { symbol: string; changePe
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { openOrderModal } = useTradingContext();
   const { data: summary, refetch: refetchSummary, isLoading } = useGetPortfolioSummary();
   const { data: watchlist, refetch: refetchWatchlist } = useGetWatchlist();
@@ -166,7 +168,7 @@ export default function HomeScreen() {
                 <React.Fragment key={item.symbol}>
                   <TouchableOpacity
                     style={styles.watchlistRow}
-                    onPress={() => openOrderModal({ symbol: item.symbol, name: item.name, currentPrice: item.currentPrice })}
+                    onPress={() => router.push(`/stock/${item.symbol}`)}
                     activeOpacity={0.7}
                   >
                     <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 12, flex: 1 }}>
