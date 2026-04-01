@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { startPriceSync } from "./angel/priceSync";
 
 const rawPort = process.env["PORT"];
 
@@ -22,4 +23,11 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  if (process.env.ANGEL_API_KEY && process.env.ANGEL_CLIENT_ID) {
+    logger.info("Starting Angel One live price sync...");
+    startPriceSync(30000);
+  } else {
+    logger.warn("Angel One credentials not configured — using mock prices");
+  }
 });

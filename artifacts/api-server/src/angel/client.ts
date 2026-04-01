@@ -17,41 +17,36 @@ interface AngelSession {
 let session: AngelSession | null = null;
 
 function generateTOTP(): string {
-  try {
-    const secret = OTPAuth.Secret.fromBase32(TOTP_SECRET.toUpperCase());
-    const totp = new OTPAuth.TOTP({ secret, algorithm: "SHA1", digits: 6, period: 30 });
-    return totp.generate();
-  } catch {
-    try {
-      const secret = new OTPAuth.Secret({ buffer: Buffer.from(TOTP_SECRET, "hex") });
-      const totp = new OTPAuth.TOTP({ secret, algorithm: "SHA1", digits: 6, period: 30 });
-      return totp.generate();
-    } catch {
-      const secret = new OTPAuth.Secret({ buffer: Buffer.from(TOTP_SECRET, "utf8") });
-      const totp = new OTPAuth.TOTP({ secret, algorithm: "SHA1", digits: 6, period: 30 });
-      return totp.generate();
-    }
-  }
+  const secret = OTPAuth.Secret.fromBase32(TOTP_SECRET.toUpperCase().trim());
+  const totp = new OTPAuth.TOTP({ secret, algorithm: "SHA1", digits: 6, period: 30 });
+  return totp.generate();
 }
 
-async function angelPost(path: string, body: unknown, token?: string) {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "Accept": "application/json",
-    "X-UserType": "USER",
-    "X-SourceID": "WEB",
-    "X-ClientLocalIP": "127.0.0.1",
-    "X-ClientPublicIP": "35.197.48.114",
-    "X-MACAddress": "00:00:00:00:00:00",
-    "X-PrivateKey": API_KEY,
-  };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+const DEFAULT_HEADERS = {
+  "Content-Type": "application/json",
+  "Accept": "application/json",
+  "X-UserType": "USER",
+  "X-SourceID": "WEB",
+  "X-ClientLocalIP": "127.0.0.1",
+  "X-ClientPublicIP": "35.197.48.114",
+  "X-MACAddress": "00:00:00:00:00:00",
+  "X-PrivateKey": API_KEY,
+};
 
+async function angelPost(path: string, body: unknown, token?: string) {
+  const headers: Record<string, string> = { ...DEFAULT_HEADERS };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
   const res = await fetch(`${BASE_URL}${path}`, {
     method: "POST",
     headers,
     body: JSON.stringify(body),
   });
+  return res.json();
+}
+
+async function angelGet(path: string, token: string) {
+  const headers: Record<string, string> = { ...DEFAULT_HEADERS, Authorization: `Bearer ${token}` };
+  const res = await fetch(`${BASE_URL}${path}`, { method: "GET", headers });
   return res.json();
 }
 
@@ -81,44 +76,54 @@ export async function getSession(): Promise<AngelSession> {
   return login();
 }
 
-export async function getLTP(exchange: string, symbolToken: string): Promise<number | null> {
-  const sess = await getSession();
-  const data = await angelPost(
-    "/rest/secure/angelbroking/order/v1/getLtpData",
-    { exchange, tradingsymbol: symbolToken, symboltoken: symbolToken },
-    sess.jwtToken
-  );
-  if (data?.data?.ltp) return parseFloat(data.data.ltp);
-  return null;
+export interface QuoteData {
+  ltp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
 }
 
-export async function getMarketQuote(
-  tokens: { exchange: string; symboltoken: string }[]
-): Promise<Record<string, { ltp: number; open: number; high: number; low: number; close: number; volume: number }>> {
+export async function getMarketQuotes(
+  nseTokens: string[],
+  bseTokens: string[] = []
+): Promise<Record<string, QuoteData>> {
   const sess = await getSession();
+  const exchangeTokens: Record<string, string[]> = {};
+  if (nseTokens.length > 0) exchangeTokens["NSE"] = nseTokens;
+  if (bseTokens.length > 0) exchangeTokens["BSE"] = bseTokens;
+
   const data = await angelPost(
     "/rest/secure/angelbroking/market/v1/quote/",
-    {
-      mode: "FULL",
-      exchangeTokens: {
-        NSE: tokens.filter((t) => t.exchange === "NSE").map((t) => t.symboltoken),
-        BSE: tokens.filter((t) => t.exchange === "BSE").map((t) => t.symboltoken),
-      },
-    },
+    { mode: "FULL", exchangeTokens },
     sess.jwtToken
   );
 
-  const result: Record<string, { ltp: number; open: number; high: number; low: number; close: number; volume: number }> = {};
+  const result: Record<string, QuoteData> = {};
   const fetched = data?.data?.fetched ?? [];
   for (const item of fetched) {
     result[item.tradingSymbol] = {
-      ltp: parseFloat(item.ltp),
-      open: parseFloat(item.open),
-      high: parseFloat(item.high),
-      low: parseFloat(item.low),
-      close: parseFloat(item.close),
-      volume: parseInt(item.tradeVolume ?? item.volume ?? "0"),
+      ltp: parseFloat(item.ltp ?? 0),
+      open: parseFloat(item.open ?? 0),
+      high: parseFloat(item.high ?? 0),
+      low: parseFloat(item.low ?? 0),
+      close: parseFloat(item.close ?? 0),
+      volume: parseInt(item.tradeVolume ?? item.volume ?? "0", 10),
     };
   }
   return result;
+}
+
+export async function searchSymbol(symbol: string, exchange = "NSE"): Promise<string | null> {
+  const sess = await getSession();
+  const data = await angelPost(
+    "/rest/secure/angelbroking/order/v1/searchScrip",
+    { exchange, searchscrip: symbol },
+    sess.jwtToken
+  );
+  const match = (data?.data ?? []).find(
+    (d: { tradingsymbol: string }) => d.tradingsymbol === symbol + "-EQ" || d.tradingsymbol === symbol
+  );
+  return match?.symboltoken ?? null;
 }
