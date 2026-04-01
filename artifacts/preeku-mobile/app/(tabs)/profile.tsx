@@ -279,7 +279,7 @@ export default function ProfileScreen() {
               { icon: "help-circle-outline", label: "Help & Support", color: colors.primary, onPress: () => {} },
               { icon: "information-circle-outline", label: "About Preeku", color: "#6d84a2", onPress: () => {} },
               {
-                icon: "refresh-outline", label: "Reset Paper Account", color: colors.loss,
+                icon: "refresh-outline", label: "Reset Account", color: colors.loss,
                 onPress: () => Alert.alert("Reset Account", "This will reset your wallet to ₹10L and clear all positions. Are you sure?", [
                   { text: "Cancel", style: "cancel" },
                   { text: "Reset", style: "destructive", onPress: () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning) }
