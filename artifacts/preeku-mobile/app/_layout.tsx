@@ -19,6 +19,8 @@ import { TradingProvider } from "@/context/TradingContext";
 import { LivePricesProvider } from "@/context/LivePricesContext";
 import OrderModal from "@/components/OrderModal";
 import { ThemeProvider } from "@/context/ThemeContext";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
+import LoginScreen from "./login";
 
 if (process.env.EXPO_PUBLIC_DOMAIN) {
   setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
@@ -29,6 +31,14 @@ SplashScreen.preventAutoHideAsync();
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
+  const { isLoggedIn, loading } = useAuth();
+
+  if (loading) return null;
+
+  if (!isLoggedIn) {
+    return <LoginScreen />;
+  }
+
   return (
     <LivePricesProvider>
       <TradingProvider>
@@ -65,7 +75,9 @@ export default function RootLayout() {
           <QueryClientProvider client={queryClient}>
             <GestureHandlerRootView style={{ flex: 1 }}>
               <KeyboardProvider>
-                <RootLayoutNav />
+                <AuthProvider>
+                  <RootLayoutNav />
+                </AuthProvider>
               </KeyboardProvider>
             </GestureHandlerRootView>
           </QueryClientProvider>

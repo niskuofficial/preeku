@@ -16,6 +16,7 @@ import {
 } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useAppTheme } from "@/context/ThemeContext";
+import { useAuth } from "@/context/AuthContext";
 
 function formatINR(n: number) {
   if (Math.abs(n) >= 1e7) return "₹" + (n / 1e7).toFixed(2) + " Cr";
@@ -51,12 +52,13 @@ export default function ProfileScreen() {
   const colors = useColors();
   const { resolvedTheme, toggleTheme } = useAppTheme();
   const isDark = resolvedTheme === "dark";
+  const { logout, userName, userEmail } = useAuth();
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === "web" ? 67 : insets.top;
 
   const queryClient = useQueryClient();
-  const [name, setName] = useState("Trader");
-  const [email, setEmail] = useState("trader@preeku.in");
+  const [name, setName] = useState(userName || "Trader");
+  const [email, setEmail] = useState(userEmail || "trader@preeku.in");
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState("");
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
@@ -434,12 +436,8 @@ export default function ProfileScreen() {
                     text: "Log Out",
                     style: "destructive",
                     onPress: async () => {
-                      await AsyncStorage.multiRemove(["preeku_name", "preeku_email", "preeku_avatar"]);
-                      setName("Trader");
-                      setEmail("trader@preeku.in");
-                      setAvatarUri(null);
+                      await logout();
                       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                      Alert.alert("Logged Out", "You have been logged out successfully.");
                     },
                   },
                 ]
