@@ -211,7 +211,7 @@ export default function ProfileScreen() {
     menuRow: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: 1, borderColor: colors.border },
     menuIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center" as const, justifyContent: "center" as const, marginRight: 12 },
     menuLabel: { fontSize: 15, color: colors.foreground, fontFamily: "Inter_500Medium", fontWeight: "500" as const, flex: 1 },
-    nameInput: { fontSize: 20, fontWeight: "700" as const, color: colors.foreground, fontFamily: "Inter_700Bold", borderBottomWidth: 2, borderColor: colors.primary, paddingVertical: 2 },
+    nameInput: { fontSize: 20, fontWeight: "700" as const, color: colors.foreground, fontFamily: "Inter_700Bold", borderBottomWidth: 2, borderColor: colors.primary, paddingVertical: 4, minWidth: 160, flex: 1 },
   });
 
   return (
@@ -243,19 +243,20 @@ export default function ProfileScreen() {
           </TouchableOpacity>
           <View style={styles.nameRow}>
             {editingName ? (
-              <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 8 }}>
+              <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 8, flex: 1 }}>
                 <TextInput
                   style={styles.nameInput}
                   value={tempName}
                   onChangeText={setTempName}
                   onSubmitEditing={saveName}
+                  returnKeyType="done"
                   autoFocus
                   selectTextOnFocus
-                  placeholder={name}
+                  placeholder="Enter your name"
                   placeholderTextColor={colors.mutedForeground}
                 />
-                <TouchableOpacity onPress={saveName}>
-                  <Ionicons name="checkmark-circle" size={26} color={colors.primary} />
+                <TouchableOpacity onPress={saveName} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="checkmark-circle" size={28} color={colors.primary} />
                 </TouchableOpacity>
               </View>
             ) : (

@@ -7,6 +7,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useGetPortfolioSummary, useGetWatchlist, useGetMarketHeatmap, useGetPositions, useGetHoldings } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
@@ -100,10 +101,18 @@ export default function HomeScreen() {
 
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [profileName, setProfileName] = useState("Trader");
-  useEffect(() => {
-    AsyncStorage.getItem("preeku_avatar").then((v) => setAvatarUri(v));
+  const navigation = useNavigation();
+
+  const reloadProfile = useCallback(() => {
+    AsyncStorage.getItem("preeku_avatar").then((v) => setAvatarUri(v ?? null));
     AsyncStorage.getItem("preeku_name").then((v) => { if (v) setProfileName(v); });
   }, []);
+
+  useEffect(() => {
+    reloadProfile();
+    const unsub = navigation.addListener("focus", reloadProfile);
+    return unsub;
+  }, [navigation, reloadProfile]);
 
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
   const apiBase = domain ? `https://${domain}` : "http://localhost:8080";
