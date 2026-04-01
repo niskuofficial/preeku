@@ -178,7 +178,7 @@ export default function Markets() {
               onClick={() => fetchNextPage()}
               className="px-5 py-2 text-sm font-semibold bg-card border border-border rounded-lg text-primary hover:bg-accent transition-colors"
             >
-              Load More (+10)
+              Load More
             </button>
           ) : stockList.length > 0 && !isLoading ? (
             <p className="text-muted-foreground text-xs">All {stockList.length} stocks loaded</p>

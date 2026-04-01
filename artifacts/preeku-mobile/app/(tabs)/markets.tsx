@@ -208,7 +208,7 @@ export default function MarketsScreen() {
               style={{ margin: 16, backgroundColor: colors.card, borderRadius: 12, padding: 14, alignItems: "center", borderWidth: 1, borderColor: colors.border }}
               onPress={() => fetchNextPage()}
             >
-              <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Load More (+10)</Text>
+              <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Load More</Text>
             </TouchableOpacity>
           ) : stockList.length > 0 ? (
             <Text style={{ textAlign: "center", color: colors.mutedForeground, padding: 20, fontFamily: "Inter_400Regular", fontSize: 12 }}>
