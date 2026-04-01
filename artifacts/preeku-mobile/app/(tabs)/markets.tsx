@@ -48,21 +48,8 @@ function StockRow({ item, onPress, onWatchlist, inWatchlist, colors }: {
         <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 1 }} numberOfLines={1}>{item.name.split(" ").slice(0, 3).join(" ")}</Text>
       </View>
 
-      {/* Bookmark button before price */}
-      <TouchableOpacity
-        onPress={(e) => { e.stopPropagation?.(); onWatchlist(); }}
-        activeOpacity={0.7}
-        style={{ padding: 8, marginRight: 4 }}
-      >
-        <Ionicons
-          name={inWatchlist ? "bookmark" : "bookmark-outline"}
-          size={20}
-          color={inWatchlist ? colors.primary : colors.mutedForeground}
-        />
-      </TouchableOpacity>
-
       {/* Price + % */}
-      <View style={{ alignItems: "flex-end" }}>
+      <View style={{ alignItems: "flex-end", marginRight: 4 }}>
         <FlashingPrice
           value={price}
           symbol={item.symbol}
@@ -75,6 +62,19 @@ function StockRow({ item, onPress, onWatchlist, inWatchlist, colors }: {
           </Text>
         </View>
       </View>
+
+      {/* Bookmark button after price */}
+      <TouchableOpacity
+        onPress={(e) => { e.stopPropagation?.(); onWatchlist(); }}
+        activeOpacity={0.7}
+        style={{ padding: 8 }}
+      >
+        <Ionicons
+          name={inWatchlist ? "bookmark" : "bookmark-outline"}
+          size={20}
+          color={inWatchlist ? colors.primary : colors.mutedForeground}
+        />
+      </TouchableOpacity>
     </TouchableOpacity>
   );
 }
