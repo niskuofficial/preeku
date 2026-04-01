@@ -1,4 +1,5 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   RefreshControl, Platform, Image,
@@ -102,6 +103,15 @@ export default function HomeScreen() {
     AsyncStorage.getItem("preeku_avatar").then((v) => setAvatarUri(v));
     AsyncStorage.getItem("preeku_name").then((v) => { if (v) setProfileName(v); });
   }, []);
+
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  const apiBase = domain ? `https://${domain}` : "http://localhost:8080";
+  const { data: indicesData } = useQuery<Array<{ name: string; value: number; change: number; changePercent: number }>>({
+    queryKey: ["market-indices"],
+    queryFn: () => fetch(`${apiBase}/api/market/indices`).then((r) => r.json()),
+    refetchInterval: 30000,
+    staleTime: 15000,
+  });
 
   const s = summary as Summary | undefined;
   const watchlistItems: WatchlistItem[] = Array.isArray(watchlist) ? watchlist : [];
@@ -230,6 +240,36 @@ export default function HomeScreen() {
         contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 100 : 100 }}
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
+        {/* Market Indices — NIFTY 50 & SENSEX */}
+        <View style={{ flexDirection: "row" as const, marginHorizontal: 16, marginBottom: 12, gap: 10 }}>
+          {(indicesData && indicesData.length > 0 ? indicesData : [
+            { name: "NIFTY 50", value: 0, change: 0, changePercent: 0 },
+            { name: "SENSEX", value: 0, change: 0, changePercent: 0 },
+          ]).map((idx) => {
+            const up = idx.changePercent >= 0;
+            const clr = idx.value === 0 ? colors.mutedForeground : up ? colors.gain : colors.loss;
+            return (
+              <View key={idx.name} style={{ flex: 1, backgroundColor: colors.card, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: clr + "30" }}>
+                <View style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, marginBottom: 4 }}>
+                  <Text style={{ fontSize: 11, fontWeight: "700" as const, color: colors.mutedForeground, fontFamily: "Inter_700Bold", letterSpacing: 0.5 }}>{idx.name}</Text>
+                  <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 2, backgroundColor: clr + "15", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                    <Ionicons name={up ? "trending-up" : "trending-down"} size={10} color={clr} />
+                    <Text style={{ fontSize: 10, color: clr, fontFamily: "Inter_600SemiBold", fontWeight: "600" as const }}>
+                      {idx.value === 0 ? "—" : `${up ? "+" : ""}${idx.changePercent.toFixed(2)}%`}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 18, fontWeight: "700" as const, color: colors.foreground, fontFamily: "Inter_700Bold" }}>
+                  {idx.value === 0 ? "—" : idx.value.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+                </Text>
+                <Text style={{ fontSize: 11, color: clr, fontFamily: "Inter_400Regular", marginTop: 2 }}>
+                  {idx.value === 0 ? "Loading..." : `${up ? "+" : ""}${idx.change.toFixed(2)} pts`}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+
         {/* Portfolio Card — live prices recalculate currentValue, P&L every tick */}
         <View style={styles.portfolioCard}>
           <Text style={styles.portfolioLabel}>PORTFOLIO VALUE</Text>

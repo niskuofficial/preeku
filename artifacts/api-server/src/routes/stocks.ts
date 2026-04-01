@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, stocksTable } from "@workspace/db";
 import { eq, ilike, or, sql } from "drizzle-orm";
+import { getMarketQuotes } from "../angel/client";
 
 const router: IRouter = Router();
 
@@ -135,5 +136,47 @@ function generatePriceHistory(open: number, close: number, points = 78) {
   history[history.length - 1].price = close;
   return history;
 }
+
+// Cache indices for 15s to avoid hammering Angel API
+let indicesCache: { data: unknown; ts: number } | null = null;
+
+router.get("/market/indices", async (req, res) => {
+  try {
+    if (indicesCache && Date.now() - indicesCache.ts < 15000) {
+      res.json(indicesCache.data);
+      return;
+    }
+    // Fetch separately to avoid key collision — one NSE token, one BSE token
+    const [nseQuotes, bseQuotes] = await Promise.all([
+      getMarketQuotes(["26000"], []),
+      getMarketQuotes([], ["1"]),
+    ]);
+    const allNse = Object.values(nseQuotes);
+    const allBse = Object.values(bseQuotes);
+    const nifty = allNse[0] ?? null;
+    const sensex = allBse[0] ?? null;
+    const data = [
+      {
+        name: "NIFTY 50",
+        value: nifty?.ltp ?? 0,
+        change: nifty?.close > 0 ? nifty.ltp - nifty.close : 0,
+        changePercent: nifty?.close > 0 ? ((nifty.ltp - nifty.close) / nifty.close) * 100 : 0,
+        open: nifty?.open ?? 0, high: nifty?.high ?? 0, low: nifty?.low ?? 0,
+      },
+      {
+        name: "SENSEX",
+        value: sensex?.ltp ?? 0,
+        change: sensex?.close > 0 ? sensex.ltp - sensex.close : 0,
+        changePercent: sensex?.close > 0 ? ((sensex.ltp - sensex.close) / sensex.close) * 100 : 0,
+        open: sensex?.open ?? 0, high: sensex?.high ?? 0, low: sensex?.low ?? 0,
+      },
+    ];
+    indicesCache = { data, ts: Date.now() };
+    res.json(data);
+  } catch (err) {
+    req.log.error({ err }, "Error fetching indices");
+    res.status(500).json({ error: "Failed to fetch indices" });
+  }
+});
 
 export default router;
