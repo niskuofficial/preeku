@@ -369,14 +369,19 @@ export default function HomeScreen() {
             Hello, <Text style={{ color: colors.foreground, fontFamily: "Inter_700Bold", fontWeight: "700" }}>{profileName.split(" ")[0]}</Text> 👋
           </Text>
         </View>
-        <TouchableOpacity onPress={() => router.push("/(tabs)/profile")} activeOpacity={0.75} style={{ width: 36, height: 36, borderRadius: 18, overflow: "hidden", borderWidth: 2, borderColor: colors.primary + "50" }}>
-          {avatarUri ? (
-            <Image source={{ uri: avatarUri }} style={{ width: 36, height: 36 }} />
-          ) : (
-            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary + "25", alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ color: colors.primary, fontSize: 14, fontWeight: "700", fontFamily: "Inter_700Bold", lineHeight: 14, textAlignVertical: "center", includeFontPadding: false }}>
-                {profileName.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase()}
-              </Text>
+        <TouchableOpacity onPress={() => router.push("/(tabs)/profile")} activeOpacity={0.75} style={{ width: 40, height: 40, position: "relative" }}>
+          <View style={{ width: 36, height: 36, borderRadius: 18, overflow: "hidden", borderWidth: 2, borderColor: colors.primary + "50" }}>
+            {avatarUri ? (
+              <Image source={{ uri: avatarUri }} style={{ width: 36, height: 36 }} />
+            ) : (
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary + "20", alignItems: "center", justifyContent: "center" }}>
+                <Ionicons name="camera" size={16} color={colors.primary} />
+              </View>
+            )}
+          </View>
+          {!avatarUri && (
+            <View style={{ position: "absolute", bottom: 0, right: 0, width: 14, height: 14, borderRadius: 7, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: colors.background }}>
+              <Ionicons name="add" size={9} color="#fff" />
             </View>
           )}
         </TouchableOpacity>
