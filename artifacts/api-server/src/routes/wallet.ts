@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, walletTable, positionsTable, stocksTable } from "@workspace/db";
+import { db, walletTable, positionsTable, stocksTable, ordersTable } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -44,6 +44,25 @@ router.get("/wallet", async (req, res) => {
     });
   } catch (err) {
     req.log.error({ err }, "Error fetching wallet");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/account/reset", async (req, res) => {
+  try {
+    await db.delete(ordersTable);
+    await db.delete(positionsTable);
+    const [wallet] = await db.select().from(walletTable).limit(1);
+    if (wallet) {
+      await db.update(walletTable)
+        .set({ balance: "1000000", updatedAt: new Date() })
+        .where(eq(walletTable.id, wallet.id));
+    } else {
+      await db.insert(walletTable).values({ balance: "1000000", initialBalance: "1000000" });
+    }
+    res.json({ success: true, message: "Account reset successfully" });
+  } catch (err) {
+    req.log.error({ err }, "Error resetting account");
     res.status(500).json({ error: "Internal server error" });
   }
 });

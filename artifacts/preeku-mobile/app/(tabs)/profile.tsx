@@ -8,7 +8,12 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
-import { useGetPortfolioSummary, useGetWallet, useListOrders } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useGetPortfolioSummary, useGetWallet, useListOrders,
+  getGetPortfolioSummaryQueryKey, getGetWalletQueryKey,
+  getGetPositionsQueryKey, getGetHoldingsQueryKey, getListOrdersQueryKey,
+} from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 
 function formatINR(n: number) {
@@ -46,11 +51,13 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === "web" ? 67 : insets.top;
 
+  const queryClient = useQueryClient();
   const [name, setName] = useState("Trader");
   const [email, setEmail] = useState("trader@preeku.in");
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState("");
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
 
   const { data: summary } = useGetPortfolioSummary();
   const { data: wallet } = useGetWallet();
@@ -78,6 +85,28 @@ export default function ProfileScreen() {
     }
     setEditingName(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const handleReset = async () => {
+    setResetting(true);
+    try {
+      const domain = process.env.EXPO_PUBLIC_DOMAIN;
+      const baseUrl = domain ? `https://${domain}` : "http://localhost:8080";
+      const res = await fetch(`${baseUrl}/api/account/reset`, { method: "POST" });
+      if (!res.ok) throw new Error("Reset failed");
+      await queryClient.invalidateQueries({ queryKey: getGetWalletQueryKey() });
+      await queryClient.invalidateQueries({ queryKey: getGetPortfolioSummaryQueryKey() });
+      await queryClient.invalidateQueries({ queryKey: getGetPositionsQueryKey() });
+      await queryClient.invalidateQueries({ queryKey: getGetHoldingsQueryKey() });
+      await queryClient.invalidateQueries({ queryKey: getListOrdersQueryKey() });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Account Reset", "Your wallet has been reset to ₹10,00,000 and all positions cleared.");
+    } catch {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Error", "Could not reset account. Please try again.");
+    } finally {
+      setResetting(false);
+    }
   };
 
   const pickAvatar = () => {
@@ -279,15 +308,18 @@ export default function ProfileScreen() {
               { icon: "help-circle-outline", label: "Help & Support", color: colors.primary, onPress: () => {} },
               { icon: "information-circle-outline", label: "About Preeku", color: "#6d84a2", onPress: () => {} },
               {
-                icon: "refresh-outline", label: "Reset Account", color: colors.loss,
-                onPress: () => Alert.alert("Reset Account", "This will reset your wallet to ₹10L and clear all positions. Are you sure?", [
-                  { text: "Cancel", style: "cancel" },
-                  { text: "Reset", style: "destructive", onPress: () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning) }
-                ])
+                icon: "refresh-outline", label: resetting ? "Resetting…" : "Reset Account", color: colors.loss,
+                onPress: () => {
+                  if (resetting) return;
+                  Alert.alert("Reset Account", "This will reset your wallet to ₹10,00,000 and clear all positions and orders. Are you sure?", [
+                    { text: "Cancel", style: "cancel" },
+                    { text: "Reset", style: "destructive", onPress: handleReset },
+                  ]);
+                }
               },
             ].map(({ icon, label, color, onPress }, idx, arr) => (
               <TouchableOpacity
-                key={label}
+                key={idx}
                 style={[styles.menuRow, idx === arr.length - 1 && { borderBottomWidth: 0 }]}
                 onPress={() => { Haptics.selectionAsync(); onPress(); }}
                 activeOpacity={0.7}
