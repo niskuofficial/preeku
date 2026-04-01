@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity,
-  Platform, ActivityIndicator, Alert,
+  Platform, ActivityIndicator, Alert, RefreshControl,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
