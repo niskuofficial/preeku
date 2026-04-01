@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   RefreshControl, Platform, Image,
@@ -6,11 +6,11 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useGetPortfolioSummary, useGetWatchlist, useGetMarketHeatmap } from "@workspace/api-client-react";
+import { useGetPortfolioSummary, useGetWatchlist, useGetMarketHeatmap, useGetPositions, useGetHoldings } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useTradingContext } from "@/context/TradingContext";
 import { FlashingPrice } from "@/components/FlashingPrice";
-import { useLivePrice } from "@/context/LivePricesContext";
+import { useLivePrice, useLivePrices } from "@/context/LivePricesContext";
 
 function formatINR(n: number) {
   if (Math.abs(n) >= 1e7) return "₹" + (n / 1e7).toFixed(2) + "Cr";
@@ -35,6 +35,13 @@ interface Summary {
   walletBalance: number; currentValue: number; totalPnl: number;
   totalPnlPercent: number; dayPnl: number; dayPnlPercent: number;
   totalInvested: number; openPositions: number; totalHoldings: number;
+}
+interface PortfolioHolding {
+  symbol: string; quantity: number; avgBuyPrice: number;
+  investedValue: number; dayChangePercent: number;
+}
+interface PortfolioPosition {
+  symbol: string; quantity: number; avgBuyPrice: number; investedValue: number;
 }
 
 function WatchlistRow({ item, colors, onPress }: { item: WatchlistItem; colors: ReturnType<typeof useColors>; onPress: () => void }) {
@@ -84,10 +91,48 @@ export default function HomeScreen() {
   const { data: summary, refetch: refetchSummary, isLoading } = useGetPortfolioSummary({ query: { refetchInterval: 30000 } });
   const { data: watchlist, refetch: refetchWatchlist } = useGetWatchlist({ query: { refetchInterval: 15000 } });
   const { data: heatmap } = useGetMarketHeatmap({ query: { refetchInterval: 60000 } });
+  const { data: positions } = useGetPositions();
+  const { data: holdings } = useGetHoldings();
+  const { prices } = useLivePrices();
 
   const s = summary as Summary | undefined;
   const watchlistItems: WatchlistItem[] = Array.isArray(watchlist) ? watchlist : [];
   const heatmapData: HeatmapSector[] = Array.isArray(heatmap) ? heatmap : [];
+  const positionList: PortfolioPosition[] = Array.isArray(positions) ? positions : [];
+  const holdingList: PortfolioHolding[] = Array.isArray(holdings) ? holdings : [];
+
+  const liveStats = useMemo(() => {
+    const totalInvested = s?.totalInvested ?? 0;
+    const walletBalance = s?.walletBalance ?? 1000000;
+
+    let liveCurrentValue = 0;
+    let liveDayPnl = 0;
+
+    for (const pos of positionList) {
+      const ltp = prices[pos.symbol]?.ltp ?? 0;
+      if (ltp > 0) liveCurrentValue += ltp * pos.quantity;
+      else liveCurrentValue += pos.investedValue;
+    }
+    for (const h of holdingList) {
+      const tick = prices[h.symbol];
+      const ltp = tick?.ltp ?? 0;
+      if (ltp > 0) {
+        liveCurrentValue += ltp * h.quantity;
+        const prevClose = tick?.close ?? (ltp / (1 + (tick?.changePercent ?? 0) / 100));
+        liveDayPnl += (ltp - prevClose) * h.quantity;
+      } else {
+        liveCurrentValue += h.investedValue;
+      }
+    }
+
+    const hasHoldings = positionList.length > 0 || holdingList.length > 0;
+    const currentValue = hasHoldings ? liveCurrentValue : (s?.currentValue ?? 0);
+    const totalPnl = hasHoldings ? currentValue - totalInvested : (s?.totalPnl ?? 0);
+    const totalPnlPercent = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
+    const dayPnl = hasHoldings ? liveDayPnl : (s?.dayPnl ?? 0);
+
+    return { currentValue, totalPnl, totalPnlPercent, dayPnl, totalInvested, walletBalance };
+  }, [prices, positionList, holdingList, s]);
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
 
@@ -156,24 +201,24 @@ export default function HomeScreen() {
         contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 100 : 100 }}
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
-        {/* Portfolio Card */}
+        {/* Portfolio Card — live prices recalculate currentValue, P&L every tick */}
         <View style={styles.portfolioCard}>
           <Text style={styles.portfolioLabel}>PORTFOLIO VALUE</Text>
-          <Text style={styles.portfolioValue}>{formatINR(s?.currentValue ?? 0)}</Text>
+          <Text style={styles.portfolioValue}>{formatINR(liveStats.currentValue)}</Text>
           <View style={styles.pnlRow}>
-            <View style={[styles.pnlChip, { backgroundColor: (s?.totalPnl ?? 0) >= 0 ? colors.gainBg : colors.lossBg }]}>
-              <Ionicons name={(s?.totalPnl ?? 0) >= 0 ? "trending-up" : "trending-down"} size={14} color={(s?.totalPnl ?? 0) >= 0 ? colors.gain : colors.loss} />
-              <Text style={{ color: (s?.totalPnl ?? 0) >= 0 ? colors.gain : colors.loss, fontSize: 13, fontFamily: "Inter_600SemiBold", fontWeight: "600" as const }}>
-                {formatINR(s?.totalPnl ?? 0)} ({formatPct(s?.totalPnlPercent ?? 0)})
+            <View style={[styles.pnlChip, { backgroundColor: liveStats.totalPnl >= 0 ? colors.gainBg : colors.lossBg }]}>
+              <Ionicons name={liveStats.totalPnl >= 0 ? "trending-up" : "trending-down"} size={14} color={liveStats.totalPnl >= 0 ? colors.gain : colors.loss} />
+              <Text style={{ color: liveStats.totalPnl >= 0 ? colors.gain : colors.loss, fontSize: 13, fontFamily: "Inter_600SemiBold", fontWeight: "600" as const }}>
+                {formatINR(liveStats.totalPnl)} ({formatPct(liveStats.totalPnlPercent)})
               </Text>
             </View>
             <Text style={{ color: colors.mutedForeground, fontSize: 11, fontFamily: "Inter_400Regular" }}>Total P&L</Text>
           </View>
           <View style={styles.statsRow}>
             {[
-              { label: "Invested", value: formatINR(s?.totalInvested ?? 0), pnl: undefined },
-              { label: "Day P&L", value: formatINR(s?.dayPnl ?? 0), pnl: s?.dayPnl },
-              { label: "Wallet", value: formatINR(s?.walletBalance ?? 1000000), pnl: undefined },
+              { label: "Invested", value: formatINR(liveStats.totalInvested), pnl: undefined },
+              { label: "Day P&L", value: formatINR(liveStats.dayPnl), pnl: liveStats.dayPnl },
+              { label: "Wallet", value: formatINR(liveStats.walletBalance), pnl: undefined },
             ].map(({ label, value, pnl }) => (
               <View key={label} style={styles.statBox}>
                 <Text style={styles.statLabel}>{label.toUpperCase()}</Text>

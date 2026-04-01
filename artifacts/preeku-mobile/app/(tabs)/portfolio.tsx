@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity,
   Platform, ActivityIndicator, RefreshControl,
@@ -147,6 +147,32 @@ export default function PortfolioScreen() {
   const holdingList: Holding[] = Array.isArray(holdings) ? holdings : [];
   const s = summary as Summary | undefined;
 
+  const liveStats = useMemo(() => {
+    const totalInvested = s?.totalInvested ?? 0;
+    let liveCurrentValue = 0;
+    let liveDayPnl = 0;
+    for (const pos of positionList) {
+      const ltp = prices[pos.symbol]?.ltp ?? 0;
+      liveCurrentValue += ltp > 0 ? ltp * pos.quantity : pos.investedValue;
+    }
+    for (const h of holdingList) {
+      const tick = prices[h.symbol];
+      const ltp = tick?.ltp ?? 0;
+      if (ltp > 0) {
+        liveCurrentValue += ltp * h.quantity;
+        const prevClose = tick?.close ?? ltp;
+        liveDayPnl += (ltp - prevClose) * h.quantity;
+      } else {
+        liveCurrentValue += h.investedValue;
+      }
+    }
+    const hasData = positionList.length > 0 || holdingList.length > 0;
+    const currentValue = hasData ? liveCurrentValue : (s?.currentValue ?? 0);
+    const totalPnl = hasData ? currentValue - totalInvested : (s?.totalPnl ?? 0);
+    const dayPnl = hasData ? liveDayPnl : (s?.dayPnl ?? 0);
+    return { totalInvested, currentValue, totalPnl, dayPnl };
+  }, [prices, positionList, holdingList, s]);
+
   const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     header: { paddingTop: topInset + 12, paddingHorizontal: 20, paddingBottom: 12 },
@@ -172,26 +198,24 @@ export default function PortfolioScreen() {
         <Text style={styles.title}>Portfolio</Text>
       </View>
 
-      {/* Summary */}
-      {s && (
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryRow}>
-            {[
-              { label: "INVESTED", value: `₹${(s.totalInvested / 100000).toFixed(2)}L`, pnl: undefined },
-              { label: "CURRENT", value: `₹${(s.currentValue / 100000).toFixed(2)}L`, pnl: undefined },
-              { label: "TOTAL P&L", value: (s.totalPnl >= 0 ? "+" : "") + `₹${(Math.abs(s.totalPnl) / 1000).toFixed(1)}K`, pnl: s.totalPnl },
-              { label: "DAY P&L", value: (s.dayPnl >= 0 ? "+" : "") + `₹${(Math.abs(s.dayPnl) / 1000).toFixed(1)}K`, pnl: s.dayPnl },
-            ].map(({ label, value, pnl }) => (
-              <View key={label} style={styles.summaryBox}>
-                <Text style={styles.summaryLabel}>{label}</Text>
-                <Text style={[styles.summaryValue, { color: pnl !== undefined ? ((pnl ?? 0) >= 0 ? colors.gain : colors.loss) : colors.foreground }]}>
-                  {value}
-                </Text>
-              </View>
-            ))}
-          </View>
+      {/* Summary — live-recalculated from WebSocket prices */}
+      <View style={styles.summaryCard}>
+        <View style={styles.summaryRow}>
+          {[
+            { label: "INVESTED", value: `₹${(liveStats.totalInvested / 100000).toFixed(2)}L`, pnl: undefined },
+            { label: "CURRENT", value: `₹${(liveStats.currentValue / 100000).toFixed(2)}L`, pnl: undefined },
+            { label: "TOTAL P&L", value: (liveStats.totalPnl >= 0 ? "+" : "") + `₹${(Math.abs(liveStats.totalPnl) / 1000).toFixed(1)}K`, pnl: liveStats.totalPnl },
+            { label: "DAY P&L", value: (liveStats.dayPnl >= 0 ? "+" : "") + `₹${(Math.abs(liveStats.dayPnl) / 1000).toFixed(1)}K`, pnl: liveStats.dayPnl },
+          ].map(({ label, value, pnl }) => (
+            <View key={label} style={styles.summaryBox}>
+              <Text style={styles.summaryLabel}>{label}</Text>
+              <Text style={[styles.summaryValue, { color: pnl !== undefined ? ((pnl ?? 0) >= 0 ? colors.gain : colors.loss) : colors.foreground }]}>
+                {value}
+              </Text>
+            </View>
+          ))}
         </View>
-      )}
+      </View>
 
       {/* Tabs */}
       <View style={styles.tabRow}>
