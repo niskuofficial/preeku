@@ -151,7 +151,7 @@ export default function MarketsScreen() {
         <Ionicons name="search" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
         <TextInput
           style={{ flex: 1, height: 42, color: colors.foreground, fontSize: 14, fontFamily: "Inter_400Regular" }}
-          placeholder="Search 2,200+ NSE stocks..."
+          placeholder="Search all NSE stocks..."
           placeholderTextColor={colors.mutedForeground}
           value={search}
           onChangeText={handleSearch}
