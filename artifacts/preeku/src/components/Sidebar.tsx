@@ -1,7 +1,8 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, TrendingUp, BookMarked, ClipboardList, BarChart3, Shield, LogOut, ChevronDown } from "lucide-react";
+import { LayoutDashboard, TrendingUp, BookMarked, ClipboardList, BarChart3, Shield, LogOut, Sun, Moon } from "lucide-react";
 import { useClerk, useUser } from "@clerk/react";
 import { useState } from "react";
+import { useTheme } from "../hooks/useTheme";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -15,9 +16,13 @@ export default function Sidebar() {
   const [location] = useLocation();
   const { signOut } = useClerk();
   const { user } = useUser();
-  const [showUserMenu, setShowUserMenu] = useState(false);
+  const { isDark, toggleTheme } = useTheme();
 
-  const isAdmin = (user?.publicMetadata as any)?.isAdmin;
+  const initials = (user?.firstName || user?.emailAddresses?.[0]?.emailAddress || "U")[0].toUpperCase();
+  const displayName = user?.firstName
+    ? `${user.firstName}${user.lastName ? " " + user.lastName : ""}`
+    : user?.emailAddresses?.[0]?.emailAddress ?? "User";
+  const email = user?.emailAddresses?.[0]?.emailAddress;
 
   return (
     <aside className="flex flex-col w-16 lg:w-56 h-full bg-sidebar border-r border-sidebar-border shrink-0">
@@ -48,62 +53,59 @@ export default function Sidebar() {
           );
         })}
 
-        {/* Admin link - shown if user has admin role via API */}
         <AdminLink location={location} />
       </nav>
 
-      {/* User + Paper Trading */}
-      <div className="px-3 py-4 border-t border-sidebar-border space-y-3">
-        <div className="hidden lg:flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+      {/* Account Section */}
+      <div className="px-3 py-4 border-t border-sidebar-border space-y-2">
+        {/* Paper Trading badge */}
+        <div className="hidden lg:flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+          <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
+          <span className="text-amber-500 dark:text-amber-400 text-xs font-medium">Paper Trading</span>
+        </div>
+        <div className="lg:hidden flex justify-center py-1">
           <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-          <span className="text-amber-400 text-xs font-medium">Paper Trading</span>
-        </div>
-        <div className="lg:hidden flex justify-center">
-          <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
         </div>
 
-        {/* User menu */}
-        <div className="relative">
-          <button
-            onClick={() => setShowUserMenu(!showUserMenu)}
-            className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-sidebar-accent transition-colors"
-          >
-            <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-              {(user?.firstName || user?.emailAddresses?.[0]?.emailAddress || "U")[0].toUpperCase()}
-            </div>
-            <div className="hidden lg:flex flex-1 items-center justify-between min-w-0">
-              <div className="min-w-0">
-                <div className="text-xs font-medium text-foreground truncate">
-                  {user?.firstName || "User"}
-                </div>
-                <div className="text-xs text-muted-foreground truncate">
-                  {user?.emailAddresses?.[0]?.emailAddress}
-                </div>
-              </div>
-              <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
-            </div>
-          </button>
-
-          {showUserMenu && (
-            <div className="hidden lg:block absolute bottom-full left-0 right-0 mb-1 bg-card border border-border rounded-xl shadow-xl overflow-hidden z-50">
-              <button
-                onClick={() => signOut()}
-                className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
-              >
-                <LogOut className="w-4 h-4" />
-                Sign Out
-              </button>
-            </div>
-          )}
+        {/* User info */}
+        <div className="flex items-center gap-2.5 px-2 py-1.5">
+          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+            {initials}
+          </div>
+          <div className="hidden lg:block min-w-0 flex-1">
+            <div className="text-xs font-semibold text-foreground truncate">{displayName}</div>
+            {email && <div className="text-xs text-muted-foreground truncate">{email}</div>}
+          </div>
         </div>
 
-        {/* Mobile sign out */}
+        {/* Theme toggle */}
+        <button
+          onClick={toggleTheme}
+          title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
+        >
+          {isDark
+            ? <Sun className="w-4 h-4 shrink-0 text-amber-400" />
+            : <Moon className="w-4 h-4 shrink-0 text-indigo-500" />
+          }
+          <span className="hidden lg:block">
+            {isDark ? "Light Mode" : "Dark Mode"}
+          </span>
+          <div className="hidden lg:flex ml-auto items-center">
+            <div className={`w-8 h-4 rounded-full relative transition-colors ${isDark ? "bg-indigo-500/30" : "bg-amber-400/30"}`}>
+              <div className={`absolute top-0.5 w-3 h-3 rounded-full transition-all ${isDark ? "right-0.5 bg-indigo-400" : "left-0.5 bg-amber-500"}`} />
+            </div>
+          </div>
+        </button>
+
+        {/* Sign Out */}
         <button
           onClick={() => signOut()}
-          className="lg:hidden flex justify-center w-full py-1"
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-red-500 hover:bg-red-500/10 transition-colors"
           title="Sign Out"
         >
-          <LogOut className="w-4 h-4 text-muted-foreground hover:text-red-400 transition-colors" />
+          <LogOut className="w-4 h-4 shrink-0" />
+          <span className="hidden lg:block">Sign Out</span>
         </button>
       </div>
     </aside>
