@@ -9,6 +9,7 @@ import { useGetPositions, useGetHoldings, useGetPortfolioSummary } from "@worksp
 import { useColors } from "@/hooks/useColors";
 import { useTradingContext } from "@/context/TradingContext";
 import { useLivePrice, useLivePrices } from "@/context/LivePricesContext";
+import { FlashingPrice } from "@/components/FlashingPrice";
 import * as Haptics from "expo-haptics";
 
 interface Position {
@@ -209,19 +210,26 @@ export default function PortfolioScreen() {
       {/* Summary — live-recalculated from WebSocket prices */}
       <View style={styles.summaryCard}>
         <View style={styles.summaryRow}>
-          {[
-            { label: "INVESTED", value: `₹${(liveStats.totalInvested / 100000).toFixed(2)}L`, pnl: undefined },
-            { label: "CURRENT", value: `₹${(liveStats.currentValue / 100000).toFixed(2)}L`, pnl: undefined },
-            { label: "TOTAL P&L", value: (liveStats.totalPnl >= 0 ? "+" : "") + `₹${(Math.abs(liveStats.totalPnl) / 1000).toFixed(1)}K`, pnl: liveStats.totalPnl },
-            { label: "DAY P&L", value: (liveStats.dayPnl >= 0 ? "+" : "") + `₹${(Math.abs(liveStats.dayPnl) / 1000).toFixed(1)}K`, pnl: liveStats.dayPnl },
-          ].map(({ label, value, pnl }) => (
-            <View key={label} style={styles.summaryBox}>
-              <Text style={styles.summaryLabel}>{label}</Text>
-              <Text style={[styles.summaryValue, { color: pnl !== undefined ? ((pnl ?? 0) >= 0 ? colors.gain : colors.loss) : colors.foreground }]}>
-                {value}
-              </Text>
-            </View>
-          ))}
+          <View style={styles.summaryBox}>
+            <Text style={styles.summaryLabel}>INVESTED</Text>
+            <Text style={[styles.summaryValue, { color: colors.foreground }]}>
+              {`₹${(liveStats.totalInvested / 100000).toFixed(2)}L`}
+            </Text>
+          </View>
+          <View style={styles.summaryBox}>
+            <Text style={styles.summaryLabel}>CURRENT</Text>
+            <Text style={[styles.summaryValue, { color: colors.foreground }]}>
+              {`₹${(liveStats.currentValue / 100000).toFixed(2)}L`}
+            </Text>
+          </View>
+          <View style={styles.summaryBox}>
+            <Text style={styles.summaryLabel}>P&L</Text>
+            <FlashingPrice
+              value={liveStats.totalPnl}
+              format={(v) => (v >= 0 ? "+" : "") + `₹${(Math.abs(v) / 1000).toFixed(1)}K`}
+              style={[styles.summaryValue, { color: liveStats.totalPnl >= 0 ? colors.gain : colors.loss }] as any}
+            />
+          </View>
         </View>
       </View>
 

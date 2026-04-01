@@ -233,12 +233,8 @@ export default function HomeScreen() {
               <Text style={[styles.statValue, { color: colors.foreground }]}>{formatINR(liveStats.totalInvested)}</Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={styles.statLabel}>DAY P&L</Text>
-              <FlashingPrice
-                value={liveStats.dayPnl}
-                format={formatINR}
-                style={[styles.statValue, { color: liveStats.dayPnl >= 0 ? colors.gain : colors.loss }] as any}
-              />
+              <Text style={styles.statLabel}>CURRENT</Text>
+              <Text style={[styles.statValue, { color: colors.foreground }]}>{formatINR(liveStats.currentValue)}</Text>
             </View>
           </View>
         </View>
