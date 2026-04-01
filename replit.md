@@ -14,10 +14,16 @@
 4. Sidebar shows Admin link only to users with `isAdmin: true` in `users` table
 
 ## Database Schema (multi-user)
-- `users` table: `clerkId`, `email`, `name`, `isAdmin`, `isBlocked`
+- `users` table: `clerkId`, `email`, `name`, `profilePhoto` (TEXT, base64 data URL), `isAdmin`, `isBlocked`
 - `wallet` table: has `user_id` column (scoped per user, auto-created on first login)
 - `orders`, `positions`, `watchlist` tables: all have `user_id` column
 - Legacy data (pre-auth) has `user_id = 'LEGACY'`
+
+## Profile Photos
+- Stored as base64 data URLs in `users.profile_photo` column (TEXT)
+- Mobile: ImagePicker with `base64: true`, saved via `PATCH /api/user/me`
+- Web Admin: file input → FileReader → base64 → `PATCH /api/admin/users/:clerkId/profile`
+- Loaded from DB on mobile app startup via `GET /api/user/me`
 
 # Workspace
 

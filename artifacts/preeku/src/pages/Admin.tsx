@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Shield, Users, Wallet, Ban, CheckCircle, Crown, Search, KeyRound, Eye, EyeOff, X } from "lucide-react";
+import { Shield, Users, Wallet, Ban, CheckCircle, Crown, Search, KeyRound, Eye, EyeOff, X, Camera, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getBaseUrl } from "@/lib/api";
 
@@ -9,6 +9,7 @@ interface AdminUser {
   clerkId: string;
   email: string;
   name: string;
+  profilePhoto: string | null;
   isAdmin: boolean;
   isBlocked: boolean;
   createdAt: string;
@@ -19,6 +20,28 @@ interface AdminUser {
 
 function formatINR(n: number) {
   return "₹" + n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function UserAvatar({ name, email, photo, size = 8 }: { name: string; email: string; photo?: string | null; size?: number }) {
+  const initials = (name || email || "?")[0]?.toUpperCase();
+  if (photo) {
+    return (
+      <img
+        src={photo}
+        alt={name || email}
+        className={`w-${size} h-${size} rounded-full object-cover`}
+        style={{ width: size * 4, height: size * 4, borderRadius: "50%", objectFit: "cover" }}
+      />
+    );
+  }
+  return (
+    <div
+      className="rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary"
+      style={{ width: size * 4, height: size * 4, fontSize: size * 1.5, flexShrink: 0 }}
+    >
+      {initials}
+    </div>
+  );
 }
 
 export default function Admin() {
@@ -32,6 +55,10 @@ export default function Admin() {
   const [showPassword, setShowPassword] = useState(false);
   const [profileModal, setProfileModal] = useState<AdminUser | null>(null);
   const [addAmount, setAddAmount] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editingProfile, setEditingProfile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: users = [], isLoading, error } = useQuery<AdminUser[]>({
     queryKey: ["admin-users"],
@@ -150,6 +177,54 @@ export default function Admin() {
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  const profileMutation = useMutation({
+    mutationFn: async ({ clerkId, name, email, profilePhoto }: { clerkId: string; name?: string; email?: string; profilePhoto?: string | null }) => {
+      const res = await fetch(`${getBaseUrl()}/api/admin/users/${clerkId}/profile`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ name, email, profilePhoto }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: (data, { name, email, profilePhoto }) => {
+      qc.invalidateQueries({ queryKey: ["admin-users"] });
+      setProfileModal(prev => prev ? {
+        ...prev,
+        name: data.name ?? prev.name,
+        email: data.email ?? prev.email,
+        profilePhoto: data.profilePhoto !== undefined ? data.profilePhoto : prev.profilePhoto,
+      } : prev);
+      setEditingProfile(false);
+      toast({ title: "Profile updated successfully" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const handlePhotoUpload = (clerkId: string) => {
+    fileInputRef.current?.click();
+    fileInputRef.current!.onchange = (e: Event) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      if (file.size > 2 * 1024 * 1024) {
+        toast({ title: "Photo too large", description: "Max file size is 2MB", variant: "destructive" });
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        profileMutation.mutate({ clerkId, profilePhoto: dataUrl });
+      };
+      reader.readAsDataURL(file);
+      (e.target as HTMLInputElement).value = "";
+    };
+  };
+
+  const handleRemovePhoto = (clerkId: string) => {
+    profileMutation.mutate({ clerkId, profilePhoto: null });
+  };
+
   if (error || (adminCheck === undefined && !isLoading)) {
     return (
       <div className="flex-1 overflow-auto p-8 flex flex-col items-center justify-center gap-4">
@@ -174,6 +249,8 @@ export default function Admin() {
 
   return (
     <div className="flex-1 overflow-auto">
+      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" />
+
       <div className="p-6 max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center gap-3">
@@ -236,12 +313,10 @@ export default function Admin() {
                 ) : filtered.length === 0 ? (
                   <tr><td colSpan={6} className="text-center py-12 text-muted-foreground">No users found</td></tr>
                 ) : filtered.map(user => (
-                  <tr key={user.clerkId} className="border-b border-border/50 hover:bg-accent/30 transition-colors cursor-pointer" onClick={() => { setProfileModal(user); setAddAmount(""); }}>
+                  <tr key={user.clerkId} className="border-b border-border/50 hover:bg-accent/30 transition-colors cursor-pointer" onClick={() => { setProfileModal(user); setAddAmount(""); setEditingProfile(false); setEditName(user.name || ""); setEditEmail(user.email || ""); }}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
-                          {(user.name || user.email || "?")[0]?.toUpperCase()}
-                        </div>
+                        <UserAvatar name={user.name} email={user.email} photo={user.profilePhoto} size={8} />
                         <div>
                           <div className="font-medium text-foreground flex items-center gap-1.5">
                             {user.name || "—"}
@@ -334,7 +409,7 @@ export default function Admin() {
       {/* User Profile Modal */}
       {profileModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.7)" }}>
-          <div className="bg-card border border-border rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+          <div className="bg-card border border-border rounded-2xl w-full max-w-md shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
             {/* Header */}
             <div className="relative p-6 pb-4" style={{ background: "linear-gradient(135deg, var(--primary) 0%, #d44a1c 100%)" }}>
               <button
@@ -344,18 +419,49 @@ export default function Admin() {
                 <X className="w-4 h-4" />
               </button>
               <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center text-2xl font-bold text-white">
-                  {(profileModal.name || profileModal.email || "?")[0]?.toUpperCase()}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-bold text-white">{profileModal.name || "No Name"}</h3>
-                    {profileModal.isAdmin && <Crown className="w-4 h-4 text-amber-300" />}
-                    {profileModal.clerkId.startsWith("mobile_") && (
-                      <span className="text-xs bg-white/20 text-white px-2 py-0.5 rounded-full">Mobile</span>
+                {/* Profile Photo with edit */}
+                <div className="relative group">
+                  {profileModal.profilePhoto ? (
+                    <img
+                      src={profileModal.profilePhoto}
+                      alt={profileModal.name || profileModal.email}
+                      className="w-16 h-16 rounded-xl object-cover border-2 border-white/30"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-xl bg-white/20 flex items-center justify-center text-2xl font-bold text-white">
+                      {(profileModal.name || profileModal.email || "?")[0]?.toUpperCase()}
+                    </div>
+                  )}
+                  {/* Photo action buttons */}
+                  <div className="absolute inset-0 rounded-xl bg-black/50 flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => handlePhotoUpload(profileModal.clerkId)}
+                      className="text-white text-xs font-medium flex items-center gap-1 hover:text-primary transition-colors"
+                      title="Upload photo"
+                    >
+                      <Camera className="w-3 h-3" />
+                      <span>Upload</span>
+                    </button>
+                    {profileModal.profilePhoto && (
+                      <button
+                        onClick={() => handleRemovePhoto(profileModal.clerkId)}
+                        className="text-red-300 text-xs hover:text-red-400 transition-colors"
+                        title="Remove photo"
+                      >
+                        Remove
+                      </button>
                     )}
                   </div>
-                  <p className="text-sm text-white/70">{profileModal.email || "No email"}</p>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-bold text-white truncate">{profileModal.name || "No Name"}</h3>
+                    {profileModal.isAdmin && <Crown className="w-4 h-4 text-amber-300 flex-shrink-0" />}
+                    {profileModal.clerkId.startsWith("mobile_") && (
+                      <span className="text-xs bg-white/20 text-white px-2 py-0.5 rounded-full flex-shrink-0">Mobile</span>
+                    )}
+                  </div>
+                  <p className="text-sm text-white/70 truncate">{profileModal.email || "No email"}</p>
                   <p className="text-xs text-white/50 mt-0.5">
                     {profileModal.clerkId.startsWith("mobile_") ? "Mobile User" : "Web User"} · {profileModal.isBlocked ? "Blocked" : "Active"}
                   </p>
@@ -376,6 +482,102 @@ export default function Admin() {
                     <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
                   </div>
                 ))}
+              </div>
+
+              {/* Edit Profile Section */}
+              <div className="bg-background border border-border rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Pencil className="w-4 h-4 text-primary" />
+                    <span className="text-sm font-medium text-foreground">Edit Profile</span>
+                  </div>
+                  {!editingProfile && (
+                    <button
+                      onClick={() => { setEditingProfile(true); setEditName(profileModal.name || ""); setEditEmail(profileModal.email || ""); }}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Edit
+                    </button>
+                  )}
+                </div>
+                {editingProfile ? (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">Name</label>
+                      <input
+                        type="text"
+                        value={editName}
+                        onChange={e => setEditName(e.target.value)}
+                        placeholder="Full name"
+                        className="w-full bg-card border border-border rounded-xl px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">Email</label>
+                      <input
+                        type="email"
+                        value={editEmail}
+                        onChange={e => setEditEmail(e.target.value)}
+                        placeholder="Email address"
+                        className="w-full bg-card border border-border rounded-xl px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setEditingProfile(false)}
+                        className="flex-1 bg-background border border-border text-foreground rounded-xl py-2 text-sm hover:bg-accent transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => profileMutation.mutate({ clerkId: profileModal.clerkId, name: editName, email: editEmail })}
+                        disabled={profileMutation.isPending}
+                        className="flex-1 bg-primary text-white rounded-xl py-2 text-sm font-semibold hover:bg-primary/90 disabled:opacity-40 transition-colors"
+                      >
+                        {profileMutation.isPending ? "Saving…" : "Save"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Name</span>
+                      <span className="text-foreground font-medium">{profileModal.name || "—"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Email</span>
+                      <span className="text-foreground font-medium text-right truncate max-w-[60%]">{profileModal.email || "—"}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Photo Upload */}
+              <div className="bg-background border border-border rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Camera className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium text-foreground">Profile Photo</span>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handlePhotoUpload(profileModal.clerkId)}
+                    disabled={profileMutation.isPending}
+                    className="flex-1 bg-primary/10 border border-primary/20 text-primary text-sm font-medium rounded-xl py-2 hover:bg-primary/20 transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
+                  >
+                    <Camera className="w-4 h-4" />
+                    {profileModal.profilePhoto ? "Change Photo" : "Upload Photo"}
+                  </button>
+                  {profileModal.profilePhoto && (
+                    <button
+                      onClick={() => handleRemovePhoto(profileModal.clerkId)}
+                      disabled={profileMutation.isPending}
+                      className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl px-4 py-2 hover:bg-red-500/20 transition-colors disabled:opacity-40"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">Supported: JPG, PNG, WebP · Max 2MB</p>
               </div>
 
               {/* Wallet */}

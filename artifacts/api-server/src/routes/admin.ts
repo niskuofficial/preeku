@@ -19,6 +19,7 @@ router.get("/admin/users", requireAdmin, async (req, res) => {
         clerkId: u.clerkId,
         email: u.email,
         name: u.name,
+        profilePhoto: u.profilePhoto ?? null,
         isAdmin: u.isAdmin,
         isBlocked: u.isBlocked,
         createdAt: u.createdAt,
@@ -118,6 +119,26 @@ router.patch("/admin/users/:clerkId/password", requireAdmin, async (req, res) =>
     res.json({ success: true, message: "Password updated successfully." });
   } catch (err) {
     req.log.error({ err }, "Admin: Error changing password");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.patch("/admin/users/:clerkId/profile", requireAdmin, async (req, res) => {
+  try {
+    const { clerkId } = req.params;
+    const { name, email, profilePhoto } = req.body;
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (typeof name === "string") updates.name = name;
+    if (typeof email === "string") updates.email = email;
+    if (profilePhoto !== undefined) updates.profilePhoto = profilePhoto;
+    const [updated] = await db.update(usersTable)
+      .set(updates)
+      .where(eq(usersTable.clerkId, clerkId))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "User not found" });
+    res.json({ success: true, name: updated.name, email: updated.email, profilePhoto: updated.profilePhoto ?? null });
+  } catch (err) {
+    req.log.error({ err }, "Admin: Error updating user profile");
     res.status(500).json({ error: "Internal server error" });
   }
 });

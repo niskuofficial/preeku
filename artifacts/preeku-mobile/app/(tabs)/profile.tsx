@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   Platform, TextInput, Alert, Image, Switch, Modal, Pressable,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
@@ -22,6 +22,11 @@ function formatINR(n: number) {
   if (Math.abs(n) >= 1e7) return "₹" + (n / 1e7).toFixed(2) + " Cr";
   if (Math.abs(n) >= 1e5) return "₹" + (n / 1e5).toFixed(2) + " L";
   return "₹" + n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function getApiBase() {
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  return domain ? `https://${domain}` : "http://localhost:8080";
 }
 
 interface Summary {
@@ -52,13 +57,13 @@ export default function ProfileScreen() {
   const colors = useColors();
   const { resolvedTheme, toggleTheme } = useAppTheme();
   const isDark = resolvedTheme === "dark";
-  const { logout, userName, userEmail } = useAuth();
+  const { logout, userName, userEmail, deviceId } = useAuth();
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === "web" ? 67 : insets.top;
 
   const queryClient = useQueryClient();
   const [name, setName] = useState(userName || "Trader");
-  const [email, setEmail] = useState(userEmail || "trader@preeku.in");
+  const [email, setEmail] = useState(userEmail || "");
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState("");
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
@@ -66,30 +71,91 @@ export default function ProfileScreen() {
   const [addingBalance, setAddingBalance] = useState(false);
   const [showPhotoPicker, setShowPhotoPicker] = useState(false);
   const [showLogout, setShowLogout] = useState(false);
+  const [savingPhoto, setSavingPhoto] = useState(false);
 
   const { data: summary } = useGetPortfolioSummary();
   const { data: wallet } = useGetWallet();
   const { data: orders } = useListOrders();
 
   const s = summary as Summary | undefined;
-  const walletBalance = (wallet as { balance?: number })?.balance ?? 1000000;
+  const walletBalance = (wallet as { balance?: number })?.balance ?? 100000;
   const orderList = Array.isArray(orders) ? orders : [];
   const executedOrders = orderList.filter((o: { status: string }) => o.status === "EXECUTED");
   const winRate = executedOrders.length > 0
     ? Math.round((executedOrders.filter((o: { pnl?: number | null }) => (o.pnl ?? 0) > 0).length / executedOrders.length) * 100)
     : 0;
 
+  const authHeaders = useCallback((): Record<string, string> => {
+    const h: Record<string, string> = { "Content-Type": "application/json" };
+    if (deviceId) h["x-device-id"] = deviceId;
+    return h;
+  }, [deviceId]);
+
   useEffect(() => {
-    AsyncStorage.getItem("preeku_name").then((v) => { if (v) setName(v); });
-    AsyncStorage.getItem("preeku_email").then((v) => { if (v) setEmail(v); });
-    AsyncStorage.getItem("preeku_avatar").then((v) => { if (v) setAvatarUri(v); });
-  }, []);
+    (async () => {
+      if (!deviceId) return;
+      try {
+        const res = await fetch(`${getApiBase()}/api/user/me`, {
+          headers: { "x-device-id": deviceId },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.name) setName(data.name);
+          if (data.email) setEmail(data.email);
+          if (data.profilePhoto) setAvatarUri(data.profilePhoto);
+          return;
+        }
+      } catch {}
+      const [n, e, av] = await Promise.all([
+        AsyncStorage.getItem("preeku_name"),
+        AsyncStorage.getItem("preeku_email"),
+        AsyncStorage.getItem("preeku_avatar"),
+      ]);
+      if (n) setName(n);
+      if (e) setEmail(e);
+      if (av) setAvatarUri(av);
+    })();
+  }, [deviceId]);
+
+  const saveNameToDb = async (newName: string) => {
+    try {
+      await fetch(`${getApiBase()}/api/user/me`, {
+        method: "PATCH",
+        headers: authHeaders(),
+        body: JSON.stringify({ name: newName }),
+      });
+    } catch {}
+    await AsyncStorage.setItem("preeku_name", newName);
+  };
+
+  const savePhotoToDb = async (dataUrl: string | null) => {
+    setSavingPhoto(true);
+    try {
+      await fetch(`${getApiBase()}/api/user/me`, {
+        method: "PATCH",
+        headers: authHeaders(),
+        body: JSON.stringify({ profilePhoto: dataUrl }),
+      });
+      setAvatarUri(dataUrl);
+      if (dataUrl) {
+        await AsyncStorage.setItem("preeku_avatar", dataUrl);
+      } else {
+        await AsyncStorage.removeItem("preeku_avatar");
+      }
+    } catch {
+      setAvatarUri(dataUrl);
+      if (dataUrl) await AsyncStorage.setItem("preeku_avatar", dataUrl);
+      else await AsyncStorage.removeItem("preeku_avatar");
+    } finally {
+      setSavingPhoto(false);
+    }
+  };
 
   const saveName = () => {
     const trimmed = tempName.trim();
     if (trimmed) {
       setName(trimmed);
-      AsyncStorage.setItem("preeku_name", trimmed);
+      saveNameToDb(trimmed);
     }
     setEditingName(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -98,9 +164,10 @@ export default function ProfileScreen() {
   const handleReset = async () => {
     setResetting(true);
     try {
-      const domain = process.env.EXPO_PUBLIC_DOMAIN;
-      const baseUrl = domain ? `https://${domain}` : "http://localhost:8080";
-      const res = await fetch(`${baseUrl}/api/account/reset`, { method: "POST" });
+      const res = await fetch(`${getApiBase()}/api/account/reset`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
       if (!res.ok) throw new Error("Reset failed");
       await queryClient.invalidateQueries({ queryKey: getGetWalletQueryKey() });
       await queryClient.invalidateQueries({ queryKey: getGetPortfolioSummaryQueryKey() });
@@ -108,7 +175,7 @@ export default function ProfileScreen() {
       await queryClient.invalidateQueries({ queryKey: getGetHoldingsQueryKey() });
       await queryClient.invalidateQueries({ queryKey: getListOrdersQueryKey() });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Account Reset", "Your wallet has been reset to ₹10,00,000 and all positions cleared.");
+      Alert.alert("Account Reset", "Your wallet has been reset to ₹1,00,000 and all positions cleared.");
     } catch {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert("Error", "Could not reset account. Please try again.");
@@ -128,11 +195,9 @@ export default function ProfileScreen() {
           onPress: async () => {
             setAddingBalance(true);
             try {
-              const domain = process.env.EXPO_PUBLIC_DOMAIN;
-              const baseUrl = domain ? `https://${domain}` : "http://localhost:8080";
-              const res = await fetch(`${baseUrl}/api/wallet/add-balance`, {
+              const res = await fetch(`${getApiBase()}/api/wallet/add-balance`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: authHeaders(),
                 body: JSON.stringify({ amount }),
               });
               if (!res.ok) throw new Error("Failed");
@@ -160,11 +225,13 @@ export default function ProfileScreen() {
     setShowPhotoPicker(false);
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) { Alert.alert("Permission needed", "Allow camera access to take a photo."); return; }
-    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.6, base64: true });
     if (!result.canceled && result.assets[0]) {
-      setAvatarUri(result.assets[0].uri);
-      AsyncStorage.setItem("preeku_avatar", result.assets[0].uri);
+      const asset = result.assets[0];
+      const mime = asset.mimeType ?? "image/jpeg";
+      const dataUrl = asset.base64 ? `data:${mime};base64,${asset.base64}` : asset.uri;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await savePhotoToDb(dataUrl);
     }
   };
 
@@ -172,19 +239,20 @@ export default function ProfileScreen() {
     setShowPhotoPicker(false);
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) { Alert.alert("Permission needed", "Allow gallery access to pick a photo."); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: "images", allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: "images", allowsEditing: true, aspect: [1, 1], quality: 0.6, base64: true });
     if (!result.canceled && result.assets[0]) {
-      setAvatarUri(result.assets[0].uri);
-      AsyncStorage.setItem("preeku_avatar", result.assets[0].uri);
+      const asset = result.assets[0];
+      const mime = asset.mimeType ?? "image/jpeg";
+      const dataUrl = asset.base64 ? `data:${mime};base64,${asset.base64}` : asset.uri;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await savePhotoToDb(dataUrl);
     }
   };
 
-  const removePhoto = () => {
+  const removePhoto = async () => {
     setShowPhotoPicker(false);
-    setAvatarUri(null);
-    AsyncStorage.removeItem("preeku_avatar");
     Haptics.selectionAsync();
+    await savePhotoToDb(null);
   };
 
   const initials = name.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
@@ -234,7 +302,7 @@ export default function ProfileScreen() {
 
         {/* Profile Card */}
         <View style={styles.profileCard}>
-          <TouchableOpacity onPress={pickAvatar} activeOpacity={0.8} style={{ position: "relative" as const }}>
+          <TouchableOpacity onPress={pickAvatar} activeOpacity={0.8} style={{ position: "relative" as const }} disabled={savingPhoto}>
             <View style={styles.avatar}>
               {avatarUri ? (
                 <Image source={{ uri: avatarUri }} style={{ width: 64, height: 64, borderRadius: 20 }} />
@@ -245,10 +313,11 @@ export default function ProfileScreen() {
             <View style={{
               position: "absolute" as const, bottom: -4, right: -4,
               width: 24, height: 24, borderRadius: 12,
-              backgroundColor: colors.primary, borderWidth: 2, borderColor: colors.card,
+              backgroundColor: savingPhoto ? colors.mutedForeground : colors.primary,
+              borderWidth: 2, borderColor: colors.card,
               alignItems: "center" as const, justifyContent: "center" as const,
             }}>
-              <Ionicons name="camera" size={12} color="#fff" />
+              <Ionicons name={savingPhoto ? "sync" : "camera"} size={12} color="#fff" />
             </View>
           </TouchableOpacity>
           <View style={styles.nameRow}>
@@ -291,7 +360,6 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>TRADING STATS</Text>
 
-          {/* Wallet Balance Card — full width */}
           <View style={{ backgroundColor: colors.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.border, marginBottom: 10 }}>
             <View style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, marginBottom: 10 }}>
               <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 8 }}>
@@ -374,18 +442,13 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Menu Items */}
+        {/* Settings */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>SETTINGS</Text>
           <View style={styles.menuCard}>
-            {/* Theme Toggle */}
             <View style={[styles.menuRow, { borderBottomWidth: 1, borderColor: colors.border }]}>
               <View style={[styles.menuIcon, { backgroundColor: (isDark ? "#818cf8" : "#f59e0b") + "18" }]}>
-                <Ionicons
-                  name={isDark ? "moon" : "sunny"}
-                  size={20}
-                  color={isDark ? "#818cf8" : "#f59e0b"}
-                />
+                <Ionicons name={isDark ? "moon" : "sunny"} size={20} color={isDark ? "#818cf8" : "#f59e0b"} />
               </View>
               <Text style={styles.menuLabel}>{isDark ? "Dark Mode" : "Light Mode"}</Text>
               <Switch
@@ -404,7 +467,7 @@ export default function ProfileScreen() {
                 icon: "refresh-outline", label: resetting ? "Resetting…" : "Reset Account", color: colors.loss,
                 onPress: () => {
                   if (resetting) return;
-                  Alert.alert("Reset Account", "This will reset your wallet to ₹10,00,000 and clear all positions and orders. Are you sure?", [
+                  Alert.alert("Reset Account", "This will reset your wallet to ₹1,00,000 and clear all positions and orders. Are you sure?", [
                     { text: "Cancel", style: "cancel" },
                     { text: "Reset", style: "destructive", onPress: handleReset },
                   ]);
@@ -451,133 +514,81 @@ export default function ProfileScreen() {
         </Text>
       </ScrollView>
 
-      {/* ── Custom Photo Picker Bottom Sheet ── */}
+      {/* Photo Picker Bottom Sheet */}
       <Modal visible={showPhotoPicker} transparent animationType="slide" onRequestClose={() => setShowPhotoPicker(false)}>
         <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setShowPhotoPicker(false)}>
           <Pressable onPress={(e) => e.stopPropagation()}>
             <View style={{
               backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24,
               paddingBottom: insets.bottom + 16, paddingTop: 8,
-              borderTopWidth: 1, borderColor: colors.border,
             }}>
-              {/* Handle bar */}
-              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: "center", marginBottom: 20 }} />
+              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: "center", marginBottom: 16 }} />
+              <Text style={{ textAlign: "center", fontSize: 16, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold", marginBottom: 16 }}>
+                Profile Photo
+              </Text>
 
-              {/* Header */}
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, marginBottom: 20 }}>
-                <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: colors.primary + "18", alignItems: "center", justifyContent: "center" }}>
-                  <Ionicons name="camera" size={22} color={colors.primary} />
-                </View>
-                <View>
-                  <Text style={{ fontSize: 17, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" }}>Profile Photo</Text>
-                  <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 1 }}>Choose how to update your photo</Text>
-                </View>
-              </View>
-
-              {/* Options */}
-              <View style={{ marginHorizontal: 16, gap: 8 }}>
+              {[
+                { icon: "camera-outline", label: "Take Photo", color: colors.primary, onPress: pickFromCamera },
+                { icon: "images-outline", label: "Choose from Gallery", color: colors.primary, onPress: pickFromGallery },
+                ...(avatarUri ? [{ icon: "trash-outline", label: "Remove Photo", color: "#ef4444", onPress: removePhoto }] : []),
+              ].map(({ icon, label, color, onPress }, idx) => (
                 <TouchableOpacity
-                  onPress={pickFromCamera}
+                  key={idx}
+                  onPress={onPress}
                   activeOpacity={0.7}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: colors.primary + "12", borderRadius: 14, paddingHorizontal: 18, paddingVertical: 16, borderWidth: 1, borderColor: colors.primary + "25" }}
+                  style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 24, paddingVertical: 14, gap: 14 }}
                 >
-                  <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: colors.primary + "20", alignItems: "center", justifyContent: "center" }}>
-                    <Ionicons name="camera-outline" size={20} color={colors.primary} />
+                  <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: color + "15", alignItems: "center", justifyContent: "center" }}>
+                    <Ionicons name={icon as keyof typeof Ionicons.glyphMap} size={22} color={color} />
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 15, fontWeight: "600", color: colors.foreground, fontFamily: "Inter_600SemiBold" }}>Take Photo</Text>
-                    <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 1 }}>Use camera to click a new photo</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+                  <Text style={{ fontSize: 16, color: color === "#ef4444" ? color : colors.foreground, fontFamily: "Inter_500Medium", fontWeight: "500" }}>
+                    {label}
+                  </Text>
                 </TouchableOpacity>
+              ))}
 
-                <TouchableOpacity
-                  onPress={pickFromGallery}
-                  activeOpacity={0.7}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: colors.card, borderRadius: 14, paddingHorizontal: 18, paddingVertical: 16, borderWidth: 1, borderColor: colors.border }}
-                >
-                  <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: "#8b5cf618", alignItems: "center", justifyContent: "center" }}>
-                    <Ionicons name="images-outline" size={20} color="#8b5cf6" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 15, fontWeight: "600", color: colors.foreground, fontFamily: "Inter_600SemiBold" }}>Choose from Gallery</Text>
-                    <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 1 }}>Pick an existing photo</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
-                </TouchableOpacity>
-
-                {avatarUri && (
-                  <TouchableOpacity
-                    onPress={removePhoto}
-                    activeOpacity={0.7}
-                    style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#ef444410", borderRadius: 14, paddingHorizontal: 18, paddingVertical: 16, borderWidth: 1, borderColor: "#ef444425" }}
-                  >
-                    <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: "#ef444420", alignItems: "center", justifyContent: "center" }}>
-                      <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 15, fontWeight: "600", color: "#ef4444", fontFamily: "Inter_600SemiBold" }}>Remove Photo</Text>
-                      <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 1 }}>Revert to initials avatar</Text>
-                    </View>
-                  </TouchableOpacity>
-                )}
-
-                <TouchableOpacity
-                  onPress={() => setShowPhotoPicker(false)}
-                  activeOpacity={0.7}
-                  style={{ backgroundColor: colors.background, borderRadius: 14, paddingVertical: 15, alignItems: "center", borderWidth: 1, borderColor: colors.border }}
-                >
-                  <Text style={{ fontSize: 15, fontWeight: "600", color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                onPress={() => setShowPhotoPicker(false)}
+                style={{ marginHorizontal: 16, marginTop: 8, paddingVertical: 14, backgroundColor: colors.background, borderRadius: 14, alignItems: "center" }}
+              >
+                <Text style={{ color: colors.mutedForeground, fontSize: 15, fontFamily: "Inter_500Medium", fontWeight: "500" }}>Cancel</Text>
+              </TouchableOpacity>
             </View>
           </Pressable>
         </Pressable>
       </Modal>
 
-      {/* ── Custom Logout Confirmation Modal ── */}
+      {/* Logout Confirmation */}
       <Modal visible={showLogout} transparent animationType="fade" onRequestClose={() => setShowLogout(false)}>
-        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", padding: 24 }} onPress={() => setShowLogout(false)}>
-          <Pressable onPress={(e) => e.stopPropagation()}>
-            <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 24, width: "100%", borderWidth: 1, borderColor: colors.border }}>
-              {/* Icon */}
-              <View style={{ width: 60, height: 60, borderRadius: 18, backgroundColor: "#ef444415", alignItems: "center", justifyContent: "center", alignSelf: "center", marginBottom: 16 }}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 24, width: "100%", maxWidth: 340, borderWidth: 1, borderColor: colors.border }}>
+            <View style={{ alignItems: "center", marginBottom: 16 }}>
+              <View style={{ width: 56, height: 56, borderRadius: 16, backgroundColor: "#ef444415", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
                 <Ionicons name="log-out-outline" size={28} color="#ef4444" />
               </View>
-
-              <Text style={{ fontSize: 20, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold", textAlign: "center", marginBottom: 8 }}>Log Out?</Text>
-              <Text style={{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20, marginBottom: 24 }}>
-                You will be logged out of your Preeku account. Your data will remain safe.
-              </Text>
-
-              <View style={{ gap: 10 }}>
-                <TouchableOpacity
-                  onPress={async () => {
-                    setShowLogout(false);
-                    await logout();
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  }}
-                  activeOpacity={0.8}
-                  style={{ backgroundColor: "#ef4444", borderRadius: 14, paddingVertical: 14, alignItems: "center" }}
-                >
-                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#fff", fontFamily: "Inter_700Bold" }}>Yes, Log Out</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={() => setShowLogout(false)}
-                  activeOpacity={0.7}
-                  style={{ backgroundColor: colors.background, borderRadius: 14, paddingVertical: 14, alignItems: "center", borderWidth: 1, borderColor: colors.border }}
-                >
-                  <Text style={{ fontSize: 15, fontWeight: "600", color: colors.foreground, fontFamily: "Inter_600SemiBold" }}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-
-              <Text style={{ fontSize: 11, color: colors.mutedForeground, textAlign: "center", marginTop: 14, fontFamily: "Inter_400Regular" }}>
-                Preeku Version 1.1.0
+              <Text style={{ fontSize: 18, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold", marginBottom: 6 }}>Log Out?</Text>
+              <Text style={{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_400Regular", textAlign: "center" }}>
+                Your portfolio and trading history will be saved.
               </Text>
             </View>
-          </Pressable>
-        </Pressable>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <TouchableOpacity
+                onPress={() => setShowLogout(false)}
+                activeOpacity={0.8}
+                style={{ flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, alignItems: "center" }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: "600", color: colors.foreground, fontFamily: "Inter_600SemiBold" }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { setShowLogout(false); logout(); }}
+                activeOpacity={0.8}
+                style={{ flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: "#ef4444", alignItems: "center" }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: "600", color: "#fff", fontFamily: "Inter_600SemiBold" }}>Log Out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </View>
   );

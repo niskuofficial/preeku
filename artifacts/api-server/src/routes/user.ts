@@ -15,6 +15,7 @@ router.get("/user/me", requireAuth, async (req, res) => {
       clerkId: user.clerkId,
       email: user.email,
       name: user.name,
+      profilePhoto: user.profilePhoto ?? null,
       isAdmin: user.isAdmin,
       isBlocked: user.isBlocked,
       createdAt: user.createdAt,
@@ -28,12 +29,19 @@ router.get("/user/me", requireAuth, async (req, res) => {
 router.patch("/user/me", requireAuth, async (req, res) => {
   const userId = (req as any).userId;
   try {
-    const { name } = req.body;
+    const { name, profilePhoto } = req.body;
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (typeof name === "string") updates.name = name;
+    if (profilePhoto !== undefined) updates.profilePhoto = profilePhoto;
     const [updated] = await db.update(usersTable)
-      .set({ name: name ?? "", updatedAt: new Date() })
+      .set(updates)
       .where(eq(usersTable.clerkId, userId))
       .returning();
-    res.json({ success: true, name: updated?.name ?? "" });
+    res.json({
+      success: true,
+      name: updated?.name ?? "",
+      profilePhoto: updated?.profilePhoto ?? null,
+    });
   } catch (err) {
     req.log.error({ err }, "Error updating user profile");
     res.status(500).json({ error: "Internal server error" });
