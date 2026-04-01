@@ -81,11 +81,10 @@ export default function Markets() {
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         {[
           { label: "Gainers", count: gainers, color: "text-green-400" },
           { label: "Losers", count: losers, color: "text-red-400" },
-          { label: "Loaded", count: stockList.length, color: "text-primary" },
         ].map(({ label, count, color }) => (
           <div key={label} className="bg-card border border-border rounded-lg p-3 text-center">
             <div className={`text-xl font-bold font-mono ${color}`}>{count}</div>
