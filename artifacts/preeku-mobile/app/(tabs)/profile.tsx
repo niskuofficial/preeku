@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from "react";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Platform, TextInput, Alert,
+  Platform, TextInput, Alert, Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 import { useGetPortfolioSummary, useGetWallet, useListOrders } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 
@@ -49,6 +50,7 @@ export default function ProfileScreen() {
   const [email, setEmail] = useState("trader@preeku.in");
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState("");
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
 
   const { data: summary } = useGetPortfolioSummary();
   const { data: wallet } = useGetWallet();
@@ -65,6 +67,7 @@ export default function ProfileScreen() {
   useEffect(() => {
     AsyncStorage.getItem("preeku_name").then((v) => { if (v) setName(v); });
     AsyncStorage.getItem("preeku_email").then((v) => { if (v) setEmail(v); });
+    AsyncStorage.getItem("preeku_avatar").then((v) => { if (v) setAvatarUri(v); });
   }, []);
 
   const saveName = () => {
@@ -75,6 +78,39 @@ export default function ProfileScreen() {
     }
     setEditingName(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const pickAvatar = () => {
+    Alert.alert("Profile Photo", "Choose an option", [
+      {
+        text: "Camera",
+        onPress: async () => {
+          const perm = await ImagePicker.requestCameraPermissionsAsync();
+          if (!perm.granted) { Alert.alert("Permission needed", "Allow camera access to take a photo."); return; }
+          const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+          if (!result.canceled && result.assets[0]) {
+            setAvatarUri(result.assets[0].uri);
+            AsyncStorage.setItem("preeku_avatar", result.assets[0].uri);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+        },
+      },
+      {
+        text: "Choose from Gallery",
+        onPress: async () => {
+          const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (!perm.granted) { Alert.alert("Permission needed", "Allow gallery access to pick a photo."); return; }
+          const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: "images", allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+          if (!result.canceled && result.assets[0]) {
+            setAvatarUri(result.assets[0].uri);
+            AsyncStorage.setItem("preeku_avatar", result.assets[0].uri);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+        },
+      },
+      { text: "Remove Photo", style: "destructive", onPress: () => { setAvatarUri(null); AsyncStorage.removeItem("preeku_avatar"); } },
+      { text: "Cancel", style: "cancel" },
+    ]);
   };
 
   const initials = name.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
@@ -124,9 +160,23 @@ export default function ProfileScreen() {
 
         {/* Profile Card */}
         <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials}</Text>
-          </View>
+          <TouchableOpacity onPress={pickAvatar} activeOpacity={0.8} style={{ position: "relative" as const }}>
+            <View style={styles.avatar}>
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={{ width: 64, height: 64, borderRadius: 20 }} />
+              ) : (
+                <Text style={styles.avatarText}>{initials}</Text>
+              )}
+            </View>
+            <View style={{
+              position: "absolute" as const, bottom: -4, right: -4,
+              width: 24, height: 24, borderRadius: 12,
+              backgroundColor: colors.primary, borderWidth: 2, borderColor: colors.card,
+              alignItems: "center" as const, justifyContent: "center" as const,
+            }}>
+              <Ionicons name="camera" size={12} color="#fff" />
+            </View>
+          </TouchableOpacity>
           <View style={styles.nameRow}>
             {editingName ? (
               <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 8 }}>
