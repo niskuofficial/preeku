@@ -1,5 +1,5 @@
 import { useGetPortfolioSummary, useGetMarketHeatmap, useListOrders, useGetWatchlist } from "@workspace/api-client-react";
-import { formatINR, formatPercent, pnlClass, formatINRCompact } from "@/lib/format";
+import { formatINR, formatPercent, pnlClass } from "@/lib/format";
 import { useTradingContext } from "@/context/TradingContext";
 import { TrendingUp, TrendingDown, Wallet, BarChart3, ArrowUpRight, ArrowDownRight, Clock } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
@@ -109,10 +109,10 @@ export default function Dashboard() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard label="Wallet Balance" value={s ? formatINRCompact(s.walletBalance) : "₹10,00,000"} sub="Available cash" icon={Wallet} />
-        <StatCard label="Portfolio Value" value={s ? formatINRCompact(s.currentValue) : "₹0"} sub={s ? formatPercent(s.totalPnlPercent) : undefined} positive={s ? s.totalPnl >= 0 : undefined} icon={BarChart3} />
-        <StatCard label="Total P&L" value={s ? formatINRCompact(s.totalPnl) : "₹0"} sub={s ? formatPercent(s.totalPnlPercent) : undefined} positive={s ? s.totalPnl >= 0 : undefined} icon={s && s.totalPnl >= 0 ? TrendingUp : TrendingDown} />
-        <StatCard label="Day P&L" value={s ? formatINRCompact(s.dayPnl) : "₹0"} sub={s ? formatPercent(s.dayPnlPercent) : undefined} positive={s ? s.dayPnl >= 0 : undefined} />
+        <StatCard label="Wallet Balance" value={s ? formatINR(s.walletBalance) : "₹10,00,000"} sub="Available cash" icon={Wallet} />
+        <StatCard label="Portfolio Value" value={s ? formatINR(s.currentValue) : "₹0"} sub={s ? formatPercent(s.totalPnlPercent) : undefined} positive={s ? s.totalPnl >= 0 : undefined} icon={BarChart3} />
+        <StatCard label="Total P&L" value={s ? formatINR(s.totalPnl) : "₹0"} sub={s ? formatPercent(s.totalPnlPercent) : undefined} positive={s ? s.totalPnl >= 0 : undefined} icon={s && s.totalPnl >= 0 ? TrendingUp : TrendingDown} />
+        <StatCard label="Day P&L" value={s ? formatINR(s.dayPnl) : "₹0"} sub={s ? formatPercent(s.dayPnlPercent) : undefined} positive={s ? s.dayPnl >= 0 : undefined} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
