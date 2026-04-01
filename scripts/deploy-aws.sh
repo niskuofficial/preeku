@@ -1,150 +1,171 @@
 #!/bin/bash
-
-# Preeku - AWS EC2 Deployment Script
-# EC2: Ubuntu 22.04 LTS | Run as: bash deploy-aws.sh
-# Domain: preeku.niskutech.com
-
+# Preeku - AWS EC2 Deployment Script v2
+# Ubuntu 22.04 | Domain: preeku.niskutech.com
 set -e
 
+APP_DIR="/var/www/preeku"
 DOMAIN="preeku.niskutech.com"
 REPO="https://github.com/niskuofficial/preeku"
-APP_DIR="/var/www/preeku"
 
 echo "======================================"
-echo "  Preeku - AWS Deployment Starting"
+echo "  Preeku AWS Deploy v2"
 echo "======================================"
 
-# 1. System update
-echo "[1/8] System update..."
-sudo apt-get update -y && sudo apt-get upgrade -y
-
-# 2. Install Node.js 20 via NVM
-echo "[2/8] Installing Node.js..."
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+# Load NVM always
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-nvm install 20 && nvm use 20 && nvm alias default 20
 
-# 3. Install pnpm & pm2
-echo "[3/8] Installing pnpm and PM2..."
-npm install -g pnpm pm2
-
-# 4. Install nginx & certbot
-echo "[4/8] Installing Nginx and Certbot..."
-sudo apt-get install -y nginx certbot python3-certbot-nginx
-
-# 5. Install PostgreSQL
-echo "[5/8] Installing PostgreSQL..."
-sudo apt-get install -y postgresql postgresql-contrib
-sudo systemctl start postgresql && sudo systemctl enable postgresql
-
-# Create DB and user
-sudo -u postgres psql <<EOF
-CREATE USER preeku_user WITH PASSWORD 'Preeku@DB2024!';
-CREATE DATABASE preeku_db OWNER preeku_user;
-GRANT ALL PRIVILEGES ON DATABASE preeku_db TO preeku_user;
-EOF
-
-DB_URL="postgresql://preeku_user:Preeku%40DB2024!@localhost:5432/preeku_db"
-echo "DB created: $DB_URL"
-
-# 6. Clone and setup repo
-echo "[6/8] Cloning repository..."
-sudo mkdir -p $APP_DIR && sudo chown $USER:$USER $APP_DIR
-git clone $REPO $APP_DIR
-cd $APP_DIR
-
-# Create .env file
-cat > $APP_DIR/.env <<EOF
-DATABASE_URL=$DB_URL
-NODE_ENV=production
-SESSION_SECRET=preeku-prod-secret-$(openssl rand -hex 16)
-
-# IMPORTANT: Yeh values apni credentials se replace karo
-ANGEL_API_KEY=your_angel_api_key
-ANGEL_CLIENT_ID=your_angel_client_id
-ANGEL_PASSWORD=your_angel_password
-ANGEL_TOTP_SECRET=your_angel_totp_secret
-
-# Clerk keys (apni Clerk dashboard se copy karo)
-CLERK_SECRET_KEY=your_clerk_secret_key
-VITE_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
-
-EXPO_PUBLIC_DOMAIN=$DOMAIN
-PORT=8080
-EOF
-
-echo ""
-echo "⚠️  IMPORTANT: Edit .env file with your actual credentials:"
-echo "   nano $APP_DIR/.env"
-echo ""
-read -p "Kya aapne .env file update ki? (y se aage badho): " confirm
-if [ "$confirm" != "y" ]; then
-  echo "Pehle .env file update karo phir script dobara run karo."
-  exit 1
+# Step 1: Install NVM + Node if not present
+if ! command -v node &>/dev/null; then
+  echo "[1] Installing Node.js..."
+  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+  export NVM_DIR="$HOME/.nvm"
+  \. "$NVM_DIR/nvm.sh"
+  nvm install 20
+else
+  echo "[1] Node $(node --version) already installed"
+  nvm use 20 2>/dev/null || true
 fi
 
-# 7. Install deps and build
-echo "[7/8] Installing dependencies and building..."
+# Step 2: Install pnpm if not present
+if ! command -v pnpm &>/dev/null; then
+  echo "[2] Installing pnpm..."
+  npm install -g pnpm pm2
+else
+  echo "[2] pnpm $(pnpm --version) already installed"
+fi
+
+# Ensure pm2 is installed
+if ! command -v pm2 &>/dev/null; then
+  npm install -g pm2
+fi
+
+# Step 3: Install nginx + certbot if not present
+if ! command -v nginx &>/dev/null; then
+  echo "[3] Installing nginx + certbot..."
+  sudo apt-get install -y nginx certbot python3-certbot-nginx
+else
+  echo "[3] nginx already installed"
+fi
+
+# Step 4: PostgreSQL
+if ! command -v psql &>/dev/null; then
+  echo "[4] Installing PostgreSQL..."
+  sudo apt-get install -y postgresql postgresql-contrib
+  sudo systemctl start postgresql
+  sudo systemctl enable postgresql
+fi
+
+# Create DB/user (ignore errors if already exists)
+echo "[4] Setting up PostgreSQL..."
+sudo -u postgres psql -c "CREATE USER preeku_user WITH PASSWORD 'Preeku\$DB2024!';" 2>/dev/null || true
+sudo -u postgres psql -c "CREATE DATABASE preeku_db OWNER preeku_user;" 2>/dev/null || true
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE preeku_db TO preeku_user;" 2>/dev/null || true
+
+DB_URL="postgresql://preeku_user:Preeku\$DB2024!@localhost:5432/preeku_db"
+
+# Step 5: Clone or pull repo
+echo "[5] Syncing code..."
+sudo mkdir -p $APP_DIR
+sudo chown $USER:$USER $APP_DIR
+
+if [ -d "$APP_DIR/.git" ]; then
+  cd $APP_DIR && git pull origin main
+else
+  git clone $REPO $APP_DIR
+  cd $APP_DIR
+fi
+
+# Step 6: Write .env
+echo "[6] Setting up .env..."
+if [ ! -f "$APP_DIR/.env" ] || ! grep -q "CLERK_SECRET_KEY=sk_" "$APP_DIR/.env"; then
+  echo ""
+  echo "======================================" 
+  echo "  Ab aapko credentials enter karne hain"
+  echo "======================================"
+  read -p "ANGEL_API_KEY: " angel_api
+  read -p "ANGEL_CLIENT_ID: " angel_id
+  read -p "ANGEL_PASSWORD: " angel_pass
+  read -p "ANGEL_TOTP_SECRET: " angel_totp
+  read -p "CLERK_SECRET_KEY (sk_ se shuru hoga): " clerk_secret
+  read -p "VITE_CLERK_PUBLISHABLE_KEY (pk_ se shuru hoga): " clerk_pub
+
+  cat > $APP_DIR/.env <<ENVEOF
+DATABASE_URL=$DB_URL
+NODE_ENV=production
+SESSION_SECRET=$(openssl rand -hex 32)
+ANGEL_API_KEY=$angel_api
+ANGEL_CLIENT_ID=$angel_id
+ANGEL_PASSWORD=$angel_pass
+ANGEL_TOTP_SECRET=$angel_totp
+CLERK_SECRET_KEY=$clerk_secret
+VITE_CLERK_PUBLISHABLE_KEY=$clerk_pub
+EXPO_PUBLIC_DOMAIN=$DOMAIN
+PORT=8080
+ENVEOF
+  echo ".env file saved!"
+else
+  echo ".env already configured, skipping..."
+fi
+
+# Load env vars
+set -a; source $APP_DIR/.env; set +a
+
+# Step 7: Install dependencies
+echo "[7] Installing dependencies..."
 cd $APP_DIR
-pnpm install --frozen-lockfile
+pnpm install
 
-# Run DB migrations
-pnpm --filter @workspace/db run push || true
-
-# Build web app
+# Step 8: Build
+echo "[8] Building web app..."
 pnpm --filter @workspace/preeku run build
 
-# Build API server
+echo "[8] Building API server..."
 pnpm --filter @workspace/api-server run build
 
-# 8. Setup PM2 for API server
-echo "[8/8] Setting up PM2 and Nginx..."
-cat > $APP_DIR/ecosystem.config.js <<EOF
+# Step 9: PM2
+echo "[9] Starting API with PM2..."
+cat > $APP_DIR/ecosystem.config.cjs <<PMEOF
 module.exports = {
   apps: [{
     name: 'preeku-api',
     script: './artifacts/api-server/dist/index.mjs',
     cwd: '$APP_DIR',
     env_file: '$APP_DIR/.env',
+    interpreter: 'node',
+    interpreter_args: '--enable-source-maps',
     instances: 1,
     autorestart: true,
     watch: false,
-    max_memory_restart: '512M',
-    interpreter: 'node',
-    interpreter_args: '--enable-source-maps'
+    max_memory_restart: '400M'
   }]
 }
-EOF
+PMEOF
 
-pm2 start $APP_DIR/ecosystem.config.js
+pm2 delete preeku-api 2>/dev/null || true
+pm2 start $APP_DIR/ecosystem.config.cjs
 pm2 save
-pm2 startup | tail -1 | sudo bash
+sudo env PATH=$PATH:$(which node) $(which pm2) startup systemd -u $USER --hp $HOME | tail -1 | sudo bash || true
 
-# Setup Nginx
-sudo tee /etc/nginx/sites-available/preeku <<EOF
+# Step 10: Nginx
+echo "[10] Configuring Nginx..."
+sudo tee /etc/nginx/sites-available/preeku > /dev/null <<NGINXEOF
 server {
     listen 80;
     server_name $DOMAIN;
+    client_max_body_size 10M;
 
-    # Web App (static files)
     root $APP_DIR/artifacts/preeku/dist/public;
     index index.html;
 
-    # API proxy
     location /api/ {
         proxy_pass http://localhost:8080;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection 'upgrade';
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_cache_bypass \$http_upgrade;
     }
 
-    # WebSocket
     location /ws {
         proxy_pass http://localhost:8080;
         proxy_http_version 1.1;
@@ -153,43 +174,25 @@ server {
         proxy_set_header Host \$host;
     }
 
-    # SPA routing
     location / {
         try_files \$uri \$uri/ /index.html;
     }
 }
-EOF
+NGINXEOF
 
 sudo ln -sf /etc/nginx/sites-available/preeku /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t && sudo systemctl reload nginx
 
-# SSL Certificate
-echo ""
-echo "======================================"
-echo "  SSL Certificate Setup"
-echo "======================================"
-echo "Pehle DNS record add karo:"
-echo "  Type: A"
-echo "  Name: preeku"
-echo "  Value: $(curl -s ifconfig.me)"
-echo "  TTL: Auto"
-echo ""
-read -p "DNS propagate ho gaya? (y se SSL setup shuru hoga): " dns_ready
-if [ "$dns_ready" == "y" ]; then
-  sudo certbot --nginx -d $DOMAIN --non-interactive --agree-tos -m preeku.com@gmail.com
-  sudo systemctl reload nginx
-fi
+# Step 11: SSL
+echo "[11] Setting up SSL..."
+sudo certbot --nginx -d $DOMAIN --non-interactive --agree-tos -m preeku.com@gmail.com || echo "SSL baad mein try karo — DNS propagate hone do"
 
 echo ""
 echo "======================================"
-echo "  Deployment Complete!"
-echo "======================================"
-echo "  Web App: https://$DOMAIN"
-echo "  Admin Panel: https://$DOMAIN/admin"
-echo "  API: https://$DOMAIN/api"
-echo ""
-echo "  PM2 status: pm2 status"
-echo "  Nginx status: sudo systemctl status nginx"
+echo "  DEPLOY COMPLETE!"
+echo "  URL: https://$DOMAIN"
+echo "  Admin: https://$DOMAIN/admin"
+echo "  PM2: pm2 status"
 echo "  Logs: pm2 logs preeku-api"
 echo "======================================"
