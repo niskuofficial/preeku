@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, usersTable, walletTable, ordersTable, positionsTable } from "@workspace/db";
-import { eq, desc, count } from "drizzle-orm";
+import { db, usersTable, walletTable, ordersTable, positionsTable, stocksTable } from "@workspace/db";
+import { eq, desc, count, ilike, or, sql } from "drizzle-orm";
 import { requireAdmin, requireAuth } from "../middlewares/requireAuth";
 import { getOrCreateWallet } from "./wallet";
 
@@ -139,6 +139,50 @@ router.patch("/admin/users/:clerkId/profile", requireAdmin, async (req, res) => 
     res.json({ success: true, name: updated.name, email: updated.email, profilePhoto: updated.profilePhoto ?? null });
   } catch (err) {
     req.log.error({ err }, "Admin: Error updating user profile");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Stock logos management
+router.get("/admin/stocks", requireAdmin, async (req, res) => {
+  try {
+    const search = (req.query.search as string | undefined)?.trim();
+    const limit = Math.min(parseInt(req.query.limit as string || "50", 10), 200);
+    const offset = parseInt(req.query.offset as string || "0", 10);
+    const whereClause = search ? or(ilike(stocksTable.symbol, `%${search}%`), ilike(stocksTable.name, `%${search}%`)) : undefined;
+    const [stocks, [{ total }]] = await Promise.all([
+      db.select({
+        symbol: stocksTable.symbol,
+        name: stocksTable.name,
+        exchange: stocksTable.exchange,
+        sector: stocksTable.sector,
+        logoUrl: stocksTable.logoUrl,
+      }).from(stocksTable).where(whereClause).orderBy(stocksTable.symbol).limit(limit).offset(offset),
+      db.select({ total: sql<number>`count(*)::int` }).from(stocksTable).where(whereClause),
+    ]);
+    res.setHeader("X-Total-Count", String(total));
+    res.json(stocks);
+  } catch (err) {
+    req.log.error({ err }, "Admin: Error fetching stocks");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.patch("/admin/stocks/:symbol/logo", requireAdmin, async (req, res) => {
+  try {
+    const { symbol } = req.params;
+    const { logoUrl } = req.body;
+    if (logoUrl !== null && typeof logoUrl !== "string") {
+      return res.status(400).json({ error: "logoUrl must be a string or null" });
+    }
+    const [updated] = await db.update(stocksTable)
+      .set({ logoUrl: logoUrl || null })
+      .where(eq(stocksTable.symbol, symbol.toUpperCase()))
+      .returning({ symbol: stocksTable.symbol, logoUrl: stocksTable.logoUrl });
+    if (!updated) return res.status(404).json({ error: "Stock not found" });
+    res.json({ success: true, symbol: updated.symbol, logoUrl: updated.logoUrl });
+  } catch (err) {
+    req.log.error({ err }, "Admin: Error updating stock logo");
     res.status(500).json({ error: "Internal server error" });
   }
 });

@@ -59,7 +59,7 @@ function WatchlistRow({ symbol, name, colors, onPress }: {
       activeOpacity={0.7}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
-        <StockLogo symbol={symbol} size={38} borderRadius={10} primaryColor={colors.primary} />
+        <StockLogo symbol={symbol} size={38} borderRadius={10} logoUrl={(item as any).logoUrl} />
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" }}>{symbol}</Text>
           <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 }} numberOfLines={1}>{name}</Text>
@@ -97,7 +97,7 @@ function RecentRow({ symbol, name, exchange, colors, onPress, onBuy, onSell }: {
       activeOpacity={0.7}
     >
       <View style={{ marginRight: 10 }}>
-        <StockLogo symbol={symbol} size={36} borderRadius={9} primaryColor={colors.primary} />
+        <StockLogo symbol={symbol} size={36} borderRadius={9} logoUrl={(item as any).logoUrl} />
       </View>
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>

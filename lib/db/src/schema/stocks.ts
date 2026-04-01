@@ -7,6 +7,7 @@ export const stocksTable = pgTable("stocks", {
   name: text("name").notNull(),
   exchange: text("exchange").notNull().default("NSE"),
   sector: text("sector").notNull(),
+  logoUrl: text("logo_url"),
   currentPrice: numeric("current_price", { precision: 12, scale: 2 }).notNull(),
   previousClose: numeric("previous_close", { precision: 12, scale: 2 }).notNull(),
   high: numeric("high", { precision: 12, scale: 2 }).notNull(),

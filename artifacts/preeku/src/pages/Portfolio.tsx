@@ -101,7 +101,7 @@ export default function Portfolio() {
                   <tr key={pos.id} className="border-b border-border/50 hover:bg-accent/30" data-testid={`position-row-${pos.symbol}`}>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2.5">
-                        <StockLogo symbol={pos.symbol} size={30} />
+                        <StockLogo symbol={pos.symbol} logoUrl={(pos as any).logoUrl} size={30} />
                         <div>
                           <div className="font-bold text-foreground">{pos.symbol}</div>
                           <div className="text-muted-foreground text-xs">{pos.productType}</div>
@@ -152,7 +152,7 @@ export default function Portfolio() {
                   <tr key={h.id} className="border-b border-border/50 hover:bg-accent/30" data-testid={`holding-row-${h.symbol}`}>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2.5">
-                        <StockLogo symbol={h.symbol} size={30} />
+                        <StockLogo symbol={h.symbol} logoUrl={(h as any).logoUrl} size={30} />
                         <div>
                           <div className="font-bold text-foreground">{h.symbol}</div>
                           <div className="text-muted-foreground text-xs truncate max-w-[120px]">{h.stockName}</div>

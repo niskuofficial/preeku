@@ -1,8 +1,9 @@
 import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Shield, Users, Wallet, Ban, CheckCircle, Crown, Search, KeyRound, Eye, EyeOff, X, Camera, Pencil } from "lucide-react";
+import { Shield, Users, Wallet, Ban, CheckCircle, Crown, Search, KeyRound, Eye, EyeOff, X, Camera, Pencil, Image as ImageIcon, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getBaseUrl } from "@/lib/api";
+import StockLogo from "@/components/StockLogo";
 
 interface AdminUser {
   id: number;
@@ -44,10 +45,21 @@ function UserAvatar({ name, email, photo, size = 8 }: { name: string; email: str
   );
 }
 
+interface AdminStock {
+  symbol: string;
+  name: string;
+  exchange: string;
+  sector: string;
+  logoUrl: string | null;
+}
+
 export default function Admin() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [tab, setTab] = useState<"users" | "logos">("users");
   const [search, setSearch] = useState("");
+  const [logoSearch, setLogoSearch] = useState("");
+  const [editingLogo, setEditingLogo] = useState<{ symbol: string; current: string } | null>(null);
   const [editingWallet, setEditingWallet] = useState<{ clerkId: string; balance: number } | null>(null);
   const [walletInput, setWalletInput] = useState("");
   const [passwordModal, setPasswordModal] = useState<{ clerkId: string; name: string; email: string } | null>(null);
@@ -78,6 +90,37 @@ export default function Admin() {
       return res.json();
     },
     retry: false,
+  });
+
+  const { data: adminStocks = [], isLoading: stocksLoading } = useQuery<AdminStock[]>({
+    queryKey: ["admin-stocks", logoSearch],
+    queryFn: async () => {
+      const params = logoSearch ? `?search=${encodeURIComponent(logoSearch)}&limit=100` : "?limit=100";
+      const res = await fetch(`${getBaseUrl()}/api/admin/stocks${params}`, { credentials: "include" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    enabled: tab === "logos",
+    staleTime: 30000,
+  });
+
+  const logoMutation = useMutation({
+    mutationFn: async ({ symbol, logoUrl }: { symbol: string; logoUrl: string | null }) => {
+      const res = await fetch(`${getBaseUrl()}/api/admin/stocks/${symbol}/logo`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ logoUrl }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: (_, { symbol }) => {
+      qc.invalidateQueries({ queryKey: ["admin-stocks"] });
+      setEditingLogo(null);
+      toast({ title: `Logo updated for ${symbol}` });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const blockMutation = useMutation({
@@ -281,6 +324,115 @@ export default function Admin() {
           ))}
         </div>
 
+        {/* Tabs */}
+        <div className="flex gap-2 border-b border-border">
+          {[
+            { key: "users", label: "Users", icon: Users },
+            { key: "logos", label: "Stock Logos", icon: ImageIcon },
+          ].map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setTab(key as any)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${tab === key ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            >
+              <Icon className="w-4 h-4" />
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Stock Logos Tab */}
+        {tab === "logos" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Set custom logo URLs for stocks. Logo URL should be a direct image link (PNG/JPG).</p>
+            </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search stocks by symbol or name..."
+                value={logoSearch}
+                onChange={e => setLogoSearch(e.target.value)}
+                className="w-full bg-card border border-border rounded-xl pl-10 pr-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+            </div>
+            <div className="bg-card border border-border rounded-xl overflow-hidden">
+              {stocksLoading ? (
+                <div className="p-8 text-center text-muted-foreground text-sm">Loading stocks…</div>
+              ) : adminStocks.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground text-sm">No stocks found</div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {adminStocks.map((stock) => (
+                    <div key={stock.symbol} className="flex items-center gap-4 px-4 py-3">
+                      <StockLogo symbol={stock.symbol} logoUrl={stock.logoUrl} size={36} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-foreground text-sm">{stock.symbol}</span>
+                          <span className="text-xs bg-secondary text-muted-foreground px-1.5 py-0.5 rounded">{stock.exchange}</span>
+                          {stock.logoUrl && <span className="text-xs text-green-400 font-medium">✓ Custom logo</span>}
+                        </div>
+                        <div className="text-xs text-muted-foreground truncate">{stock.name}</div>
+                      </div>
+                      {editingLogo?.symbol === stock.symbol ? (
+                        <div className="flex items-center gap-2 flex-1 max-w-md">
+                          <input
+                            type="url"
+                            autoFocus
+                            placeholder="https://example.com/logo.png"
+                            defaultValue={editingLogo.current}
+                            id={`logo-input-${stock.symbol}`}
+                            className="flex-1 bg-background border border-border rounded-lg px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                          />
+                          <button
+                            onClick={() => {
+                              const val = (document.getElementById(`logo-input-${stock.symbol}`) as HTMLInputElement)?.value?.trim();
+                              logoMutation.mutate({ symbol: stock.symbol, logoUrl: val || null });
+                            }}
+                            disabled={logoMutation.isPending}
+                            className="p-1.5 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors"
+                            title="Save"
+                          >
+                            <Save className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => setEditingLogo(null)}
+                            className="p-1.5 bg-accent text-muted-foreground rounded-lg hover:text-foreground transition-colors"
+                            title="Cancel"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          {stock.logoUrl && (
+                            <button
+                              onClick={() => logoMutation.mutate({ symbol: stock.symbol, logoUrl: null })}
+                              className="text-xs text-red-400 hover:text-red-300 transition-colors px-2 py-1 rounded-lg hover:bg-red-500/10"
+                              title="Remove logo"
+                            >
+                              Remove
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setEditingLogo({ symbol: stock.symbol, current: stock.logoUrl ?? "" })}
+                            className="flex items-center gap-1.5 text-xs bg-primary/10 text-primary px-3 py-1.5 rounded-lg hover:bg-primary/20 transition-colors font-medium"
+                          >
+                            <Pencil className="w-3 h-3" />
+                            {stock.logoUrl ? "Edit" : "Set Logo"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {tab === "users" && <>
         {/* Search */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -404,6 +556,7 @@ export default function Admin() {
             </table>
           </div>
         </div>
+        </>}
       </div>
 
       {/* User Profile Modal */}

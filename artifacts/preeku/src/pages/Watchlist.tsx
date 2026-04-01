@@ -106,7 +106,7 @@ export default function Watchlist() {
                   key={stock.symbol}
                   className="flex items-center gap-3 px-4 py-3 hover:bg-accent/20 transition-colors group"
                 >
-                  <StockLogo symbol={stock.symbol} size={32} />
+                  <StockLogo symbol={stock.symbol} logoUrl={(stock as any).logoUrl} size={32} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-foreground text-sm">{stock.symbol}</span>

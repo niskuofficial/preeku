@@ -205,7 +205,7 @@ export default function Markets() {
                 >
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2.5">
-                      <StockLogo symbol={stock.symbol} size={32} />
+                      <StockLogo symbol={stock.symbol} logoUrl={stock.logoUrl} size={32} />
                       <div>
                         <div className="font-semibold text-foreground">{stock.symbol}</div>
                         <div className="text-muted-foreground text-xs">{stock.sector}</div>

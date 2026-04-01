@@ -11,6 +11,7 @@ export interface Stock {
   name: string;
   exchange: string;
   sector: string;
+  logoUrl?: string | null;
   currentPrice: number;
   previousClose: number;
   change: number;
