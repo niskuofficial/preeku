@@ -188,9 +188,9 @@ export default function PortfolioScreen() {
     title: { fontSize: 22, fontWeight: "700" as const, color: colors.foreground, fontFamily: "Inter_700Bold" },
     summaryCard: { marginHorizontal: 16, marginBottom: 14, backgroundColor: colors.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.border },
     summaryRow: { flexDirection: "row" as const, gap: 10 },
-    summaryBox: { flex: 1, backgroundColor: colors.secondary, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: colors.border },
-    summaryLabel: { fontSize: 10, color: colors.mutedForeground, letterSpacing: 0.5, fontFamily: "Inter_400Regular" },
-    summaryValue: { fontSize: 14, fontWeight: "700" as const, fontFamily: "Inter_700Bold", marginTop: 4 },
+    summaryBox: { flex: 1, backgroundColor: colors.secondary, borderRadius: 12, paddingVertical: 20, paddingHorizontal: 16, borderWidth: 1, borderColor: colors.border, alignItems: "center" as const },
+    summaryLabel: { fontSize: 11, color: colors.mutedForeground, letterSpacing: 1, fontFamily: "Inter_400Regular", textAlign: "center" as const },
+    summaryValue: { fontSize: 28, fontWeight: "700" as const, fontFamily: "Inter_700Bold", marginTop: 6, textAlign: "center" as const },
     tabRow: { flexDirection: "row" as const, marginHorizontal: 16, marginBottom: 14, backgroundColor: colors.secondary, borderRadius: 12, padding: 4, borderWidth: 1, borderColor: colors.border },
     tabBtn: { flex: 1, paddingVertical: 10, borderRadius: 9, alignItems: "center" as const },
     tabText: { fontSize: 14, fontWeight: "600" as const, fontFamily: "Inter_600SemiBold" },
@@ -214,7 +214,7 @@ export default function PortfolioScreen() {
             <Text style={styles.summaryLabel}>P&L</Text>
             <FlashingPrice
               value={liveStats.totalPnl}
-              format={(v) => (v >= 0 ? "+" : "") + `₹${(Math.abs(v) / 1000).toFixed(1)}K`}
+              format={(v) => (v >= 0 ? "+" : "-") + "₹" + Math.abs(Math.round(v)).toLocaleString("en-IN")}
               style={[styles.summaryValue, { color: liveStats.totalPnl >= 0 ? colors.gain : colors.loss }] as any}
             />
           </View>
