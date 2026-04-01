@@ -168,10 +168,9 @@ export default function MarketsScreen() {
       {/* Stats chips */}
       <View style={{ flexDirection: "row", gap: 8, marginHorizontal: 16, marginBottom: 12 }}>
         {[
-          { label: "Gainers", value: gainers, color: colors.gain, bg: colors.gainBg, icon: "trending-up" as const },
-          { label: "Losers", value: losers, color: colors.loss, bg: colors.lossBg, icon: "trending-down" as const },
-          { label: "Loaded", value: stockList.length, color: colors.primary, bg: colors.primary + "18", icon: "stats-chart" as const },
-        ].map(({ label, value, color, bg, icon }) => (
+          { label: "Gainers", value: gainers, color: colors.gain, icon: "trending-up" as const },
+          { label: "Losers", value: losers, color: colors.loss, icon: "trending-down" as const },
+        ].map(({ label, value, color, icon }) => (
           <View key={label} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.card, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: color + "40" }}>
             <Ionicons name={icon} size={16} color={color} />
             <View>
