@@ -132,7 +132,8 @@ export default function Dashboard() {
   const { data: orders } = useListOrders();
   const { data: watchlist } = useGetWatchlist();
   const { openOrderWindow } = useTradingContext();
-  const { connected } = useLivePrices();
+  const { connected, prices } = useLivePrices();
+  const [moversTab, setMoversTab] = useState<"gainers" | "losers">("gainers");
 
   const { data: indicesData } = useQuery<IndexData[]>({
     queryKey: ["market-indices"],
@@ -145,6 +146,19 @@ export default function Dashboard() {
   const recentOrders = Array.isArray(orders) ? orders.slice(0, 5) : [];
   const heatmapData = Array.isArray(heatmap) ? heatmap : [];
   const watchlistItems = Array.isArray(watchlist) ? watchlist : [];
+
+  type HeatmapStock = { symbol: string; name: string; changePercent: number; marketCap: number; sector?: string };
+  const allMovers: HeatmapStock[] = heatmapData.flatMap(
+    (sec: { sector: string; stocks: HeatmapStock[] }) =>
+      sec.stocks.map((s) => ({ ...s, sector: sec.sector }))
+  );
+  const enriched = allMovers.map((s) => ({
+    ...s,
+    ltp: prices[s.symbol]?.ltp ?? 0,
+    chgPct: prices[s.symbol]?.changePercent ?? s.changePercent,
+  }));
+  const topGainers = [...enriched].filter((s) => s.chgPct > 0).sort((a, b) => b.chgPct - a.chgPct).slice(0, 6);
+  const topLosers = [...enriched].filter((s) => s.chgPct < 0).sort((a, b) => a.chgPct - b.chgPct).slice(0, 6);
 
   const indices: IndexData[] = indicesData && indicesData.length > 0 ? indicesData : [
     { name: "NIFTY 50", value: 0, change: 0, changePercent: 0 },
@@ -236,6 +250,83 @@ export default function Dashboard() {
                 />
               ))}
             </div>
+          )}
+        </div>
+      </div>
+
+      {/* Top Movers */}
+      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        {/* Tab bar */}
+        <div className="flex border-b border-border">
+          <button
+            type="button"
+            onClick={() => setMoversTab("gainers")}
+            className="flex-1 py-3 text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+            style={{
+              color: moversTab === "gainers" ? "#4ade80" : "var(--muted-foreground)",
+              borderBottom: moversTab === "gainers" ? "2px solid #22c55e" : "2px solid transparent",
+              background: moversTab === "gainers" ? "rgba(34,197,94,0.06)" : "transparent",
+            }}
+          >
+            <TrendingUp className="w-4 h-4" />
+            Top Gainers
+          </button>
+          <button
+            type="button"
+            onClick={() => setMoversTab("losers")}
+            className="flex-1 py-3 text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+            style={{
+              color: moversTab === "losers" ? "#f87171" : "var(--muted-foreground)",
+              borderBottom: moversTab === "losers" ? "2px solid #ef4444" : "2px solid transparent",
+              background: moversTab === "losers" ? "rgba(239,68,68,0.06)" : "transparent",
+            }}
+          >
+            <TrendingDown className="w-4 h-4" />
+            Top Losers
+          </button>
+        </div>
+
+        {/* Stock rows */}
+        <div className="divide-y divide-border/50">
+          {(moversTab === "gainers" ? topGainers : topLosers).length === 0 ? (
+            <p className="text-muted-foreground text-sm text-center py-6">
+              {heatmapData.length === 0 ? "Loading live data..." : `No ${moversTab} right now`}
+            </p>
+          ) : (
+            (moversTab === "gainers" ? topGainers : topLosers).map((stock) => (
+              <div
+                key={stock.symbol}
+                className="flex items-center justify-between px-5 py-3 hover:bg-accent/30 cursor-pointer transition-colors"
+                onClick={() => openOrderWindow({ symbol: stock.symbol, name: stock.name, currentPrice: stock.ltp })}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-bold text-white"
+                    style={{ background: stock.chgPct >= 0 ? "rgba(34,197,94,0.2)" : "rgba(239,68,68,0.2)", color: stock.chgPct >= 0 ? "#4ade80" : "#f87171" }}
+                  >
+                    {stock.symbol.slice(0, 2)}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-semibold text-foreground text-sm">{stock.symbol}</div>
+                    <div className="text-muted-foreground text-xs truncate max-w-[140px]">{stock.sector}</div>
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <div className="font-mono font-semibold text-foreground text-sm">
+                    {stock.ltp > 0 ? `₹${stock.ltp.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                  </div>
+                  <div
+                    className="text-xs font-mono font-semibold px-1.5 py-0.5 rounded"
+                    style={{
+                      background: stock.chgPct >= 0 ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)",
+                      color: stock.chgPct >= 0 ? "#4ade80" : "#f87171",
+                    }}
+                  >
+                    {stock.chgPct >= 0 ? "+" : ""}{stock.chgPct.toFixed(2)}%
+                  </div>
+                </div>
+              </div>
+            ))
           )}
         </div>
       </div>
