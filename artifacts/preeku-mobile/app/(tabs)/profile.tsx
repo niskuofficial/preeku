@@ -303,7 +303,7 @@ export default function ProfileScreen() {
         </View>
 
         <Text style={{ textAlign: "center" as const, color: colors.mutedForeground, fontSize: 12, fontFamily: "Inter_400Regular", paddingBottom: 8 }}>
-          Preeku Paper Trading v1.0 · Not SEBI registered
+          Preeku Trading v1.0 
         </Text>
       </ScrollView>
     </View>
