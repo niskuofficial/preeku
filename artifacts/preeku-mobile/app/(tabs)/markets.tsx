@@ -11,6 +11,7 @@ import { useColors } from "@/hooks/useColors";
 import { useTradingContext } from "@/context/TradingContext";
 import { FlashingPrice } from "@/components/FlashingPrice";
 import { useLivePrices, useLivePrice } from "@/context/LivePricesContext";
+import { useMarketStatus } from "@/hooks/useMarketStatus";
 
 const INITIAL_SIZE = 20;
 const LOAD_MORE_SIZE = 10;
@@ -90,6 +91,7 @@ export default function MarketsScreen() {
   const router = useRouter();
   const { openOrderModal } = useTradingContext();
   const { connected, prices } = useLivePrices();
+  const { isOpen: marketOpen, label: marketLabel } = useMarketStatus();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
@@ -138,10 +140,10 @@ export default function MarketsScreen() {
         <View>
           <Text style={{ fontSize: 22, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" }}>Markets</Text>
         </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: connected ? colors.gain + "18" : colors.border, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: connected ? colors.gain + "44" : colors.border }}>
-          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: connected ? colors.gain : colors.mutedForeground }} />
-          <Text style={{ fontSize: 11, fontFamily: "Inter_500Medium", fontWeight: "500", color: connected ? colors.gain : colors.mutedForeground }}>
-            {connected ? "LIVE" : "Polling"}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: marketOpen ? colors.gain + "18" : colors.loss + "18", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: marketOpen ? colors.gain + "44" : colors.loss + "44" }}>
+          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: marketOpen ? colors.gain : colors.loss }} />
+          <Text style={{ fontSize: 11, fontFamily: "Inter_500Medium", fontWeight: "500", color: marketOpen ? colors.gain : colors.loss }}>
+            {marketLabel}
           </Text>
         </View>
       </View>

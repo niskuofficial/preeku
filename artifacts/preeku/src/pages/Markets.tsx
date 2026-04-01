@@ -3,6 +3,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { formatINR, formatPercent, pnlClass } from "@/lib/format";
 import { useTradingContext } from "@/context/TradingContext";
 import { useLivePrices } from "@/context/LivePricesContext";
+import { useMarketStatus } from "@/hooks/useMarketStatus";
 import { Search, TrendingUp, TrendingDown, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
@@ -27,6 +28,7 @@ export default function Markets() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const { openOrderWindow } = useTradingContext();
   const { prices } = useLivePrices();
+  const { isOpen: marketOpen, label: marketLabel } = useMarketStatus();
 
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleSearch = (value: string) => {
@@ -66,7 +68,13 @@ export default function Markets() {
             {isLoading ? "Loading..." : `${stockList.length} of 2,200+ NSE stocks`}
           </p>
         </div>
-        {isFetching && !isFetchingNextPage && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+        <div className="flex items-center gap-3">
+          {isFetching && !isFetchingNextPage && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+          <span className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border ${marketOpen ? "bg-green-500/10 text-green-400 border-green-500/30" : "bg-red-500/10 text-red-400 border-red-500/30"}`}>
+            <span className={`w-2 h-2 rounded-full ${marketOpen ? "bg-green-400" : "bg-red-400"}`} />
+            {marketLabel}
+          </span>
+        </div>
       </div>
 
       <div className="relative">
