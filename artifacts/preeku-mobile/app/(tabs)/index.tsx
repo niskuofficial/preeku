@@ -16,6 +16,7 @@ import { FlashingPrice } from "@/components/FlashingPrice";
 import { useLivePrice, useLivePrices } from "@/context/LivePricesContext";
 import { useMobileWatchlist } from "@/hooks/useMobileWatchlist";
 import { useMobileRecentSearches } from "@/hooks/useMobileRecentSearches";
+import StockLogo from "@/components/StockLogo";
 
 function formatINR(n: number) {
   if (Math.abs(n) >= 1e7) return "₹" + (n / 1e7).toFixed(2) + "Cr";
@@ -58,9 +59,7 @@ function WatchlistRow({ symbol, name, colors, onPress }: {
       activeOpacity={0.7}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
-        <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: colors.primary + "18", alignItems: "center", justifyContent: "center" }}>
-          <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "700", fontFamily: "Inter_700Bold" }}>{symbol.slice(0, 2)}</Text>
-        </View>
+        <StockLogo symbol={symbol} size={38} borderRadius={10} primaryColor={colors.primary} />
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" }}>{symbol}</Text>
           <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 }} numberOfLines={1}>{name}</Text>
@@ -97,8 +96,8 @@ function RecentRow({ symbol, name, exchange, colors, onPress, onBuy, onSell }: {
       onPress={onPress}
       activeOpacity={0.7}
     >
-      <View style={{ width: 36, height: 36, borderRadius: 9, backgroundColor: colors.secondary, alignItems: "center", justifyContent: "center", marginRight: 10 }}>
-        <Text style={{ color: colors.mutedForeground, fontSize: 11, fontWeight: "700", fontFamily: "Inter_700Bold" }}>{symbol.slice(0, 2)}</Text>
+      <View style={{ marginRight: 10 }}>
+        <StockLogo symbol={symbol} size={36} borderRadius={9} primaryColor={colors.primary} />
       </View>
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>

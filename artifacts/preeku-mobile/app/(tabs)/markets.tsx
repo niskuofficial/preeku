@@ -13,6 +13,7 @@ import { FlashingPrice } from "@/components/FlashingPrice";
 import { useLivePrices, useLivePrice } from "@/context/LivePricesContext";
 import { useMarketStatus } from "@/hooks/useMarketStatus";
 import { useMobileWatchlist } from "@/hooks/useMobileWatchlist";
+import StockLogo from "@/components/StockLogo";
 import { useMobileRecentSearches } from "@/hooks/useMobileRecentSearches";
 
 const INITIAL_SIZE = 20;
@@ -40,8 +41,8 @@ function StockRow({ item, onPress, onWatchlist, inWatchlist, colors }: {
       onPress={onPress}
       style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: 1, borderColor: colors.border }}
     >
-      <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: colors.primary + "18", alignItems: "center", justifyContent: "center", marginRight: 12 }}>
-        <Text style={{ color: colors.primary, fontSize: 13, fontWeight: "700", fontFamily: "Inter_700Bold" }}>{item.symbol.slice(0, 2)}</Text>
+      <View style={{ marginRight: 12 }}>
+        <StockLogo symbol={item.symbol} size={40} borderRadius={10} primaryColor={colors.primary} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" }}>{item.symbol}</Text>

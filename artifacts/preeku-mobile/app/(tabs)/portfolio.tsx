@@ -13,6 +13,7 @@ import {
   getGetPortfolioSummaryQueryKey, getGetWalletQueryKey, getListOrdersQueryKey,
 } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
+import StockLogo from "@/components/StockLogo";
 import { useTradingContext } from "@/context/TradingContext";
 import { useLivePrice, useLivePrices } from "@/context/LivePricesContext";
 import { FlashingPrice } from "@/components/FlashingPrice";
@@ -96,9 +97,7 @@ function PositionCard({ item, colors }: { item: Position; colors: ReturnType<typ
     <View style={{ backgroundColor: colors.card, borderRadius: 14, marginHorizontal: 16, marginBottom: 10, borderWidth: 1, borderColor: colors.border, padding: 16 }}>
       <View style={{ flexDirection: "row" as const, justifyContent: "space-between" as const, alignItems: "flex-start" as const, marginBottom: 12 }}>
         <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 10, flex: 1 }}>
-          <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: colors.primary + "18", alignItems: "center" as const, justifyContent: "center" as const }}>
-            <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "700" as const, fontFamily: "Inter_700Bold" }}>{item.symbol.slice(0, 2)}</Text>
-          </View>
+          <StockLogo symbol={item.symbol} size={38} borderRadius={10} primaryColor={colors.primary} />
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 15, fontWeight: "700" as const, color: colors.foreground, fontFamily: "Inter_700Bold" }}>{item.symbol}</Text>
             <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>{item.productType} · {item.quantity} shares</Text>
@@ -153,9 +152,7 @@ function HoldingCard({ item, colors, onSell }: { item: Holding; colors: ReturnTy
     <View style={{ backgroundColor: colors.card, borderRadius: 14, marginHorizontal: 16, marginBottom: 10, borderWidth: 1, borderColor: colors.border, padding: 16 }}>
       <View style={{ flexDirection: "row" as const, justifyContent: "space-between" as const, alignItems: "flex-start" as const, marginBottom: 12 }}>
         <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 10, flex: 1 }}>
-          <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: colors.primary + "18", alignItems: "center" as const, justifyContent: "center" as const }}>
-            <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "700" as const, fontFamily: "Inter_700Bold" }}>{item.symbol.slice(0, 2)}</Text>
-          </View>
+          <StockLogo symbol={item.symbol} size={38} borderRadius={10} primaryColor={colors.primary} />
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 15, fontWeight: "700" as const, color: colors.foreground, fontFamily: "Inter_700Bold" }}>{item.symbol}</Text>
             <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }} numberOfLines={1}>{item.stockName}</Text>

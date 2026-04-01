@@ -12,6 +12,7 @@ import { useColors } from "@/hooks/useColors";
 import { useTradingContext } from "@/context/TradingContext";
 import { FlashingPrice, FlashingChange } from "@/components/FlashingPrice";
 import { useLivePrice } from "@/context/LivePricesContext";
+import StockLogo from "@/components/StockLogo";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CHART_WIDTH = SCREEN_WIDTH - 32;
@@ -195,6 +196,7 @@ export default function StockDetailScreen() {
           <Ionicons name="arrow-back" size={20} color={colors.foreground} />
         </TouchableOpacity>
 
+        <StockLogo symbol={s?.symbol ?? symbol} size={36} borderRadius={9} primaryColor={colors.primary} />
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 18, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" }}>{s?.symbol ?? symbol}</Text>
           <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 1 }} numberOfLines={1}>{s?.name ?? ""}</Text>
