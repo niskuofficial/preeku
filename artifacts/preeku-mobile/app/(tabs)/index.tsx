@@ -218,7 +218,6 @@ export default function HomeScreen() {
             {[
               { label: "Invested", value: formatINR(liveStats.totalInvested), pnl: undefined },
               { label: "Day P&L", value: formatINR(liveStats.dayPnl), pnl: liveStats.dayPnl },
-              { label: "Wallet", value: formatINR(liveStats.walletBalance), pnl: undefined },
             ].map(({ label, value, pnl }) => (
               <View key={label} style={styles.statBox}>
                 <Text style={styles.statLabel}>{label.toUpperCase()}</Text>
