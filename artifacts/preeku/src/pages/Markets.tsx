@@ -60,10 +60,12 @@ export default function Markets() {
   const gainers = stockList.filter((s) => (prices[s.symbol]?.changePercent ?? s.changePercent) > 0).length;
   const losers = stockList.filter((s) => (prices[s.symbol]?.changePercent ?? s.changePercent) < 0).length;
 
+  const getChgPct = (s: Stock) => prices[s.symbol]?.changePercent ?? s.changePercent;
+
   const filteredList = activeFilter === "gainers"
-    ? stockList.filter((s) => (prices[s.symbol]?.changePercent ?? s.changePercent) > 0)
+    ? stockList.filter((s) => getChgPct(s) > 0).sort((a, b) => getChgPct(b) - getChgPct(a))
     : activeFilter === "losers"
-    ? stockList.filter((s) => (prices[s.symbol]?.changePercent ?? s.changePercent) < 0)
+    ? stockList.filter((s) => getChgPct(s) < 0).sort((a, b) => getChgPct(a) - getChgPct(b))
     : stockList;
 
   const toggleFilter = (f: "gainers" | "losers") => setActiveFilter((prev) => (prev === f ? null : f));
