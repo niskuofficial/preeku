@@ -42,7 +42,7 @@ function StockRow({ item, onPress, onWatchlist, inWatchlist, colors }: {
       style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: 1, borderColor: colors.border }}
     >
       <View style={{ marginRight: 12 }}>
-        <StockLogo symbol={item.symbol} size={40} borderRadius={10} logoUrl={item.logoUrl} />
+        <StockLogo symbol={item.symbol} size={40} borderRadius={10} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" }}>{item.symbol}</Text>

@@ -1,35 +1,14 @@
-import React, { useState } from "react";
-import { View, Image, Text } from "react-native";
-
-const CDN_SOURCES = (symbol: string) => [
-  `https://assets.smallcase.com/images/smallplains/200x200/${symbol}.png`,
-  `https://kite.zerodha.com/static/images/instrument_logos/${symbol}.png`,
-  `https://storage.googleapis.com/kite-public/logos/${symbol}.png`,
-];
+import React from "react";
+import { View, Text } from "react-native";
 
 interface StockLogoProps {
   symbol: string;
-  logoUrl?: string | null;
   size?: number;
   borderRadius?: number;
+  primaryColor?: string;
 }
 
-export default function StockLogo({ symbol, logoUrl, size = 40, borderRadius = 10 }: StockLogoProps) {
-  const sources = logoUrl ? [logoUrl, ...CDN_SOURCES(symbol)] : CDN_SOURCES(symbol);
-  const [sourceIndex, setSourceIndex] = useState(0);
-
-  if (sourceIndex < sources.length) {
-    return (
-      <Image
-        key={sources[sourceIndex]}
-        source={{ uri: sources[sourceIndex] }}
-        style={{ width: size, height: size, borderRadius }}
-        onError={() => setSourceIndex((i) => i + 1)}
-        resizeMode="contain"
-      />
-    );
-  }
-
+export default function StockLogo({ symbol, size = 40, borderRadius = 10 }: StockLogoProps) {
   const hue = (symbol.charCodeAt(0) * 47 + (symbol.charCodeAt(1) ?? 0) * 23) % 360;
   const bg = `hsl(${hue},55%,28%)`;
   const fg = `hsl(${hue},70%,75%)`;

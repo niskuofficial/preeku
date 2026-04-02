@@ -1,11 +1,3 @@
-import { useState } from "react";
-
-const CDN_SOURCES = (symbol: string) => [
-  `https://assets.smallcase.com/images/smallplains/200x200/${symbol}.png`,
-  `https://kite.zerodha.com/static/images/instrument_logos/${symbol}.png`,
-  `https://storage.googleapis.com/kite-public/logos/${symbol}.png`,
-];
-
 interface StockLogoProps {
   symbol: string;
   logoUrl?: string | null;
@@ -21,32 +13,7 @@ function getAvatarColors(symbol: string) {
   };
 }
 
-export default function StockLogo({ symbol, logoUrl, size = 32, className = "" }: StockLogoProps) {
-  const sources = logoUrl ? [logoUrl, ...CDN_SOURCES(symbol)] : CDN_SOURCES(symbol);
-  const [sourceIndex, setSourceIndex] = useState(0);
-
-  if (sourceIndex < sources.length) {
-    return (
-      <img
-        key={sources[sourceIndex]}
-        src={sources[sourceIndex]}
-        alt={symbol}
-        width={size}
-        height={size}
-        style={{
-          width: size,
-          height: size,
-          borderRadius: 8,
-          objectFit: "contain",
-          background: "transparent",
-          flexShrink: 0,
-        }}
-        className={className}
-        onError={() => setSourceIndex((i) => i + 1)}
-      />
-    );
-  }
-
+export default function StockLogo({ symbol, size = 32, className = "" }: StockLogoProps) {
   const { bg, fg } = getAvatarColors(symbol);
   return (
     <div
