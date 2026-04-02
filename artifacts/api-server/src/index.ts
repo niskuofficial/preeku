@@ -26,10 +26,10 @@ server.listen(port, async () => {
   createPriceHub(server);
 
   if (process.env.ANGEL_API_KEY && process.env.ANGEL_CLIENT_ID) {
-    logger.info("Starting Angel One price sync (batch 50 every 3s + indices every 1s + realtime top-35 every 3s)...");
-    startPriceSync(3000);
+    logger.info("Starting Angel One price sync (batch 50 every 1s + indices every 1s + realtime top-35 every 1s)...");
+    startPriceSync(1000);
     startIndicesSync(1000);
-    startRealtimeSync(3000);
+    startRealtimeSync(1000);
 
     logger.info("Connecting to Angel One SmartStream WebSocket...");
     try {
