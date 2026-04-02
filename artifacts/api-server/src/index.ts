@@ -4,6 +4,7 @@ import { logger } from "./lib/logger";
 import { startPriceSync, startIndicesSync } from "./angel/priceSync";
 import { smartStream } from "./angel/smartstream";
 import { createPriceHub } from "./angel/priceHub";
+import { db, positionsTable } from "@workspace/db";
 
 const rawPort = process.env["PORT"];
 
@@ -32,6 +33,9 @@ server.listen(port, async () => {
     logger.info("Connecting to Angel One SmartStream WebSocket...");
     try {
       await smartStream.start();
+
+      // Auto-subscribe all portfolio/holdings stocks for real-time ticks
+      await subscribePortfolioStocks();
     } catch (err) {
       logger.warn({ err }, "SmartStream failed to start — falling back to REST polling");
     }
@@ -39,3 +43,23 @@ server.listen(port, async () => {
     logger.warn("Angel One credentials not configured — using mock prices");
   }
 });
+
+async function subscribePortfolioStocks() {
+  try {
+    const rows = await db
+      .selectDistinct({ symbol: positionsTable.symbol })
+      .from(positionsTable);
+    const symbols = rows.map((r) => r.symbol);
+    if (symbols.length > 0) {
+      smartStream.addPortfolioTokens(symbols);
+      logger.info({ symbols }, `Subscribed ${symbols.length} portfolio stocks to SmartStream`);
+    }
+  } catch (err) {
+    logger.warn({ err }, "Could not subscribe portfolio stocks to SmartStream");
+  }
+}
+
+// Export for use in orders route — call after any new BUY order
+export function subscribeSymbolToSmartStream(symbol: string) {
+  smartStream.addPortfolioTokens([symbol]);
+}

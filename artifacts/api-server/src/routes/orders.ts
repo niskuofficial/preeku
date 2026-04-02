@@ -3,6 +3,7 @@ import { db, ordersTable, walletTable, positionsTable, stocksTable } from "@work
 import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { getOrCreateWallet } from "./wallet";
+import { smartStream } from "../angel/smartstream";
 
 const router: IRouter = Router();
 
@@ -75,6 +76,8 @@ router.post("/orders", requireAuth, async (req, res) => {
           productType,
         });
       }
+      // Subscribe this stock to SmartStream for real-time price ticks
+      smartStream.addPortfolioTokens([upperSymbol]);
     } else if (side === "SELL") {
       const [existingPos] = await db.select().from(positionsTable)
         .where(and(eq(positionsTable.userId, userId), eq(positionsTable.symbol, upperSymbol), eq(positionsTable.productType, productType)));

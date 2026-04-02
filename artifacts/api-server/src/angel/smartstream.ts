@@ -1,6 +1,7 @@
 import WebSocket from "ws";
 import { EventEmitter } from "events";
 import { getSession } from "./client";
+import { FULL_SYMBOL_TOKEN_MAP } from "./symbolTokenMap";
 
 const SMARTSTREAM_URL = "wss://smartapisocket.angelone.in/smart-stream";
 
@@ -62,7 +63,6 @@ const TOKEN_SYMBOL_MAP: Record<string, string> = {
   "3456": "TATAMOTORS",
 };
 
-const NSE_TOKENS = Object.keys(TOKEN_SYMBOL_MAP);
 
 export class SmartStream extends EventEmitter {
   private ws: WebSocket | null = null;
@@ -148,16 +148,33 @@ export class SmartStream extends EventEmitter {
 
   private subscribe() {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    const tokens = Object.keys(TOKEN_SYMBOL_MAP);
     const payload = {
       correlationID: "preeku_ltp",
       action: 1,
       params: {
         mode: 2,
-        tokenList: [{ exchangeType: 1, tokens: NSE_TOKENS }],
+        tokenList: [{ exchangeType: 1, tokens }],
       },
     };
     this.ws.send(JSON.stringify(payload));
-    console.log(`[SmartStream] Subscribed to ${NSE_TOKENS.length} tokens (Quote mode)`);
+    console.log(`[SmartStream] Subscribed to ${tokens.length} tokens (Quote mode)`);
+  }
+
+  // Add portfolio/watchlist stocks to SmartStream for real-time ticks
+  addPortfolioTokens(symbols: string[]) {
+    let added = 0;
+    for (const symbol of symbols) {
+      const entry = FULL_SYMBOL_TOKEN_MAP[symbol];
+      if (entry && !TOKEN_SYMBOL_MAP[entry.token]) {
+        TOKEN_SYMBOL_MAP[entry.token] = symbol;
+        added++;
+      }
+    }
+    if (added > 0) {
+      console.log(`[SmartStream] Added ${added} portfolio tokens, re-subscribing (total: ${Object.keys(TOKEN_SYMBOL_MAP).length})`);
+      this.subscribe();
+    }
   }
 
   private startHeartbeat() {
