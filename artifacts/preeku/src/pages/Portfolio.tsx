@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { useGetPositions, useGetHoldings, useGetPortfolioSummary } from "@workspace/api-client-react";
+import { useGetPositions, useGetHoldings } from "@workspace/api-client-react";
 import { formatINR, formatPercent, pnlClass, pnlBgClass } from "@/lib/format";
 import { useTradingContext } from "@/context/TradingContext";
+import { useLivePrices } from "@/context/LivePricesContext";
 import { BarChart3, TrendingUp, TrendingDown } from "lucide-react";
 import StockLogo from "@/components/StockLogo";
 
@@ -17,24 +18,47 @@ interface Holding {
   currentValue: number; investedValue: number; dayChange: number; dayChangePercent: number;
 }
 
-interface Summary {
-  totalInvested: number; currentValue: number; totalPnl: number; totalPnlPercent: number;
-  dayPnl: number; dayPnlPercent: number; walletBalance: number;
-  openPositions: number; totalHoldings: number; totalOrders: number;
-}
-
 type TabType = "positions" | "holdings";
 
 export default function Portfolio() {
   const [activeTab, setActiveTab] = useState<TabType>("positions");
   const { data: positions } = useGetPositions();
   const { data: holdings } = useGetHoldings();
-  const { data: summary } = useGetPortfolioSummary();
   const { openOrderWindow } = useTradingContext();
+  const { prices } = useLivePrices();
 
   const positionList: Position[] = Array.isArray(positions) ? positions : [];
   const holdingList: Holding[] = Array.isArray(holdings) ? holdings : [];
-  const s = summary as Summary | undefined;
+
+  const livePositions = positionList.map((pos) => {
+    const live = prices[pos.symbol];
+    const livePrice = live?.ltp ?? pos.currentPrice;
+    const liveValue = livePrice * pos.quantity;
+    const livePnl = (livePrice - pos.avgBuyPrice) * pos.quantity;
+    const livePnlPct = pos.investedValue > 0 ? (livePnl / pos.investedValue) * 100 : 0;
+    return { ...pos, currentPrice: livePrice, currentValue: liveValue, pnl: livePnl, pnlPercent: livePnlPct };
+  });
+
+  const liveHoldings = holdingList.map((h) => {
+    const live = prices[h.symbol];
+    const livePrice = live?.ltp ?? h.currentPrice;
+    const liveValue = livePrice * h.quantity;
+    const livePnl = (livePrice - h.avgBuyPrice) * h.quantity;
+    const livePnlPct = h.investedValue > 0 ? (livePnl / h.investedValue) * 100 : 0;
+    const dayChgPct = live?.changePercent ?? h.dayChangePercent;
+    return { ...h, currentPrice: livePrice, currentValue: liveValue, pnl: livePnl, pnlPercent: livePnlPct, dayChangePercent: dayChgPct };
+  });
+
+  const totalInvested = [...livePositions, ...liveHoldings].reduce((s, x) => s + x.investedValue, 0);
+  const totalCurrentValue = [...livePositions, ...liveHoldings].reduce((s, x) => s + x.currentValue, 0);
+  const totalPnl = totalCurrentValue - totalInvested;
+  const totalPnlPct = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
+  const dayPnl = liveHoldings.reduce((s, h) => {
+    const live = prices[h.symbol];
+    return s + (live ? (live.ltp - live.close) * h.quantity : 0);
+  }, 0);
+
+  const hasAny = livePositions.length > 0 || liveHoldings.length > 0;
 
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-5">
@@ -43,21 +67,21 @@ export default function Portfolio() {
         <h1 className="text-2xl font-bold text-foreground">Portfolio</h1>
       </div>
 
-      {s && (
+      {hasAny && (
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
           {[
-            { label: "Invested", value: formatINR(s.totalInvested), pnl: undefined },
-            { label: "Current Value", value: formatINR(s.currentValue), pnl: undefined },
-            { label: "Total P&L", value: `${s.totalPnl >= 0 ? "+" : ""}${formatINR(s.totalPnl)}`, pnl: s.totalPnl },
-            { label: "Day P&L", value: `${s.dayPnl >= 0 ? "+" : ""}${formatINR(s.dayPnl)}`, pnl: s.dayPnl },
-          ].map(({ label, value, pnl }) => (
+            { label: "Invested", value: formatINR(totalInvested), pnl: undefined },
+            { label: "Current Value", value: formatINR(totalCurrentValue), pnl: undefined },
+            { label: "Total P&L", value: `${totalPnl >= 0 ? "+" : ""}${formatINR(totalPnl)}`, pnl: totalPnl, pct: totalPnlPct },
+            { label: "Day P&L", value: `${dayPnl >= 0 ? "+" : ""}${formatINR(dayPnl)}`, pnl: dayPnl, pct: undefined },
+          ].map(({ label, value, pnl, pct }) => (
             <div key={label} className="bg-card border border-border rounded-xl p-4" data-testid={`portfolio-stat-${label.replace(/\s+/g, '-')}`}>
               <div className="text-xs text-muted-foreground uppercase tracking-wider mb-2">{label}</div>
               <div className={`text-lg font-bold font-mono ${pnl !== undefined ? pnlClass(pnl) : "text-foreground"}`}>{value}</div>
-              {pnl !== undefined && (
+              {pnl !== undefined && pct !== undefined && (
                 <div className={`text-xs mt-1 flex items-center gap-1 ${pnlClass(pnl)}`}>
                   {pnl >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                  {formatPercent(s.totalInvested > 0 ? (pnl / s.totalInvested) * 100 : 0)}
+                  {formatPercent(pct)}
                 </div>
               )}
             </div>
@@ -67,8 +91,8 @@ export default function Portfolio() {
 
       <div className="flex gap-1 bg-card border border-border rounded-lg p-1 w-fit">
         {[
-          { key: "positions", label: `Positions (${positionList.length})` },
-          { key: "holdings", label: `Holdings (${holdingList.length})` },
+          { key: "positions", label: `Positions (${livePositions.length})` },
+          { key: "holdings", label: `Holdings (${liveHoldings.length})` },
         ].map(({ key, label }) => (
           <button
             key={key}
@@ -80,7 +104,7 @@ export default function Portfolio() {
       </div>
 
       {activeTab === "positions" && (
-        positionList.length === 0 ? (
+        livePositions.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground bg-card border border-border rounded-xl">
             <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-30" />
             <p className="font-medium">No open positions</p>
@@ -91,13 +115,13 @@ export default function Portfolio() {
             <table className="w-full text-sm">
               <thead className="border-b border-border">
                 <tr>
-                  {["Symbol", "Qty", "Avg Buy", "Current", "Invested", "Value", "P&L", "P&L %", ""].map((h, i) => (
+                  {["Symbol", "Qty", "Avg Buy", "LTP", "Invested", "Value", "P&L", "P&L %", ""].map((h, i) => (
                     <th key={`${h}-${i}`} className={`py-3 px-4 text-muted-foreground font-medium text-xs uppercase tracking-wider ${i === 0 ? "text-left" : i === 8 ? "text-center" : "text-right"}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {positionList.map((pos) => (
+                {livePositions.map((pos) => (
                   <tr key={pos.id} className="border-b border-border/50 hover:bg-accent/30" data-testid={`position-row-${pos.symbol}`}>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2.5">
@@ -110,7 +134,7 @@ export default function Portfolio() {
                     </td>
                     <td className="py-3 px-4 text-right font-mono text-foreground">{pos.quantity}</td>
                     <td className="py-3 px-4 text-right font-mono text-foreground">{formatINR(pos.avgBuyPrice)}</td>
-                    <td className="py-3 px-4 text-right font-mono text-foreground">{formatINR(pos.currentPrice)}</td>
+                    <td className="py-3 px-4 text-right font-mono font-semibold text-foreground">{formatINR(pos.currentPrice)}</td>
                     <td className="py-3 px-4 text-right font-mono text-muted-foreground">{formatINR(pos.investedValue)}</td>
                     <td className="py-3 px-4 text-right font-mono text-foreground">{formatINR(pos.currentValue)}</td>
                     <td className={`py-3 px-4 text-right font-mono font-semibold ${pnlClass(pos.pnl)}`}>
@@ -131,7 +155,7 @@ export default function Portfolio() {
       )}
 
       {activeTab === "holdings" && (
-        holdingList.length === 0 ? (
+        liveHoldings.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground bg-card border border-border rounded-xl">
             <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-30" />
             <p className="font-medium">No holdings</p>
@@ -142,13 +166,13 @@ export default function Portfolio() {
             <table className="w-full text-sm">
               <thead className="border-b border-border">
                 <tr>
-                  {["Symbol", "Qty", "Avg Cost", "Current", "Invested", "Value", "P&L", "Day Chg", ""].map((h, i) => (
+                  {["Symbol", "Qty", "Avg Cost", "LTP", "Invested", "Value", "P&L", "Day Chg", ""].map((h, i) => (
                     <th key={`${h}-${i}`} className={`py-3 px-4 text-muted-foreground font-medium text-xs uppercase tracking-wider ${i === 0 ? "text-left" : i === 8 ? "text-center" : "text-right"}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {holdingList.map((h) => (
+                {liveHoldings.map((h) => (
                   <tr key={h.id} className="border-b border-border/50 hover:bg-accent/30" data-testid={`holding-row-${h.symbol}`}>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2.5">
@@ -161,7 +185,7 @@ export default function Portfolio() {
                     </td>
                     <td className="py-3 px-4 text-right font-mono text-foreground">{h.quantity}</td>
                     <td className="py-3 px-4 text-right font-mono text-foreground">{formatINR(h.avgBuyPrice)}</td>
-                    <td className="py-3 px-4 text-right font-mono text-foreground">{formatINR(h.currentPrice)}</td>
+                    <td className="py-3 px-4 text-right font-mono font-semibold text-foreground">{formatINR(h.currentPrice)}</td>
                     <td className="py-3 px-4 text-right font-mono text-muted-foreground">{formatINR(h.investedValue)}</td>
                     <td className="py-3 px-4 text-right font-mono text-foreground">{formatINR(h.currentValue)}</td>
                     <td className={`py-3 px-4 text-right font-mono font-semibold ${pnlClass(h.pnl)}`}>

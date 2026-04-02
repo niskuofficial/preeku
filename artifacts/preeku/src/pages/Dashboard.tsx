@@ -1,4 +1,4 @@
-import { useGetPortfolioSummary, useGetMarketHeatmap, useListOrders, useGetWatchlist } from "@workspace/api-client-react";
+import { useGetPortfolioSummary, useGetMarketHeatmap, useListOrders, useGetWatchlist, useGetPositions, useGetHoldings } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { formatINR, formatPercent, pnlClass } from "@/lib/format";
 import { useTradingContext } from "@/context/TradingContext";
@@ -184,10 +184,12 @@ function HeatmapBlock({ sector, stocks }: {
 }
 
 export default function Dashboard() {
-  const { data: summary } = useGetPortfolioSummary();
+  const { data: summary } = useGetPortfolioSummary({ query: { refetchInterval: 10000, staleTime: 0 } });
   const { data: heatmap } = useGetMarketHeatmap();
   const { data: orders } = useListOrders();
   const { data: watchlist } = useGetWatchlist();
+  const { data: positions } = useGetPositions();
+  const { data: holdings } = useGetHoldings();
   const { openOrderWindow } = useTradingContext();
   const { connected, prices } = useLivePrices();
   const [moversTab, setMoversTab] = useState<"gainers" | "losers">("gainers");
@@ -203,6 +205,27 @@ export default function Dashboard() {
   const recentOrders = Array.isArray(orders) ? orders.slice(0, 5) : [];
   const heatmapData = Array.isArray(heatmap) ? heatmap : [];
   const watchlistItems = Array.isArray(watchlist) ? watchlist : [];
+
+  const posList = Array.isArray(positions) ? positions as Array<{ symbol: string; quantity: number; avgBuyPrice: number; currentPrice: number; investedValue: number }> : [];
+  const holdList = Array.isArray(holdings) ? holdings as Array<{ symbol: string; quantity: number; avgBuyPrice: number; currentPrice: number; investedValue: number }> : [];
+  const liveTotalInvested = [...posList, ...holdList].reduce((sum, x) => sum + x.investedValue, 0);
+  const liveTotalValue = [...posList, ...holdList].reduce((sum, x) => {
+    const lp = prices[x.symbol]?.ltp ?? x.currentPrice;
+    return sum + lp * x.quantity;
+  }, 0);
+  const liveTotalPnl = liveTotalValue - liveTotalInvested;
+  const liveTotalPnlPct = liveTotalInvested > 0 ? (liveTotalPnl / liveTotalInvested) * 100 : 0;
+  const liveDayPnl = holdList.reduce((sum, h) => {
+    const live = prices[h.symbol];
+    return sum + (live ? (live.ltp - live.close) * h.quantity : 0);
+  }, 0);
+  const liveDayPnlPct = liveTotalValue > 0 ? (liveDayPnl / liveTotalValue) * 100 : 0;
+
+  const displayValue = liveTotalInvested > 0 ? liveTotalValue : (s?.currentValue ?? 0);
+  const displayPnl = liveTotalInvested > 0 ? liveTotalPnl : (s?.totalPnl ?? 0);
+  const displayPnlPct = liveTotalInvested > 0 ? liveTotalPnlPct : (s?.totalPnlPercent ?? 0);
+  const displayDayPnl = liveTotalInvested > 0 ? liveDayPnl : (s?.dayPnl ?? 0);
+  const displayDayPnlPct = liveTotalInvested > 0 ? liveDayPnlPct : (s?.dayPnlPercent ?? 0);
 
   type HeatmapStock = { symbol: string; name: string; changePercent: number; marketCap: number; sector?: string };
   const allMovers: HeatmapStock[] = heatmapData.flatMap(
@@ -256,9 +279,9 @@ export default function Dashboard() {
       {/* Stats */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <FlashingStat label="Wallet Balance" value={s ? formatINR(s.walletBalance) : "₹10,00,000"} sub="Available cash" icon={Wallet} />
-        <FlashingStat label="Portfolio Value" value={s ? formatINR(s.currentValue) : "₹0"} sub={s ? formatPercent(s.totalPnlPercent) : undefined} positive={s ? s.totalPnl >= 0 : undefined} icon={BarChart3} />
-        <FlashingStat label="Total P&L" value={s ? formatINR(s.totalPnl) : "₹0"} sub={s ? formatPercent(s.totalPnlPercent) : undefined} positive={s ? s.totalPnl >= 0 : undefined} icon={s && s.totalPnl >= 0 ? TrendingUp : TrendingDown} />
-        <FlashingStat label="Day P&L" value={s ? formatINR(s.dayPnl) : "₹0"} sub={s ? formatPercent(s.dayPnlPercent) : undefined} positive={s ? s.dayPnl >= 0 : undefined} icon={Activity} />
+        <FlashingStat label="Portfolio Value" value={formatINR(displayValue)} sub={formatPercent(displayPnlPct)} positive={displayPnl >= 0} icon={BarChart3} />
+        <FlashingStat label="Total P&L" value={`${displayPnl >= 0 ? "+" : ""}${formatINR(displayPnl)}`} sub={formatPercent(displayPnlPct)} positive={displayPnl >= 0} icon={displayPnl >= 0 ? TrendingUp : TrendingDown} />
+        <FlashingStat label="Day P&L" value={`${displayDayPnl >= 0 ? "+" : ""}${formatINR(displayDayPnl)}`} sub={formatPercent(displayDayPnlPct)} positive={displayDayPnl >= 0} icon={Activity} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">

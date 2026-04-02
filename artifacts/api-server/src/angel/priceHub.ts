@@ -53,6 +53,12 @@ export function createPriceHub(server: Server) {
     broadcast({ type: "tick", data: tick });
   });
 
+  smartStream.on("batchPrices", (prices: Record<string, Omit<PriceTick, "token">>) => {
+    if (clients.size > 0) {
+      broadcast({ type: "snapshot", data: prices });
+    }
+  });
+
   console.log("[PriceHub] WebSocket server ready at /ws/prices");
 }
 

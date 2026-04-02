@@ -22,6 +22,8 @@ async function syncBatch(entries: [string, { token: string; angelSymbol: string 
   const quotes = await getMarketQuotes(nseTokens);
   let synced = 0;
 
+  const batchPrices: Record<string, Omit<PriceTick, "token">> = {};
+
   for (const [symbol, meta] of entries) {
     const quote = quotes[meta.angelSymbol] ?? quotes[symbol] ?? quotes[symbol + "-EQ"];
     if (!quote || !quote.ltp || quote.ltp === 0) continue;
@@ -38,27 +40,35 @@ async function syncBatch(entries: [string, { token: string; angelSymbol: string 
       })
       .where(eq(stocksTable.symbol, symbol));
 
+    const prevClose = quote.close > 0 ? quote.close : quote.ltp;
+    const change = quote.ltp - prevClose;
+    const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+
+    batchPrices[symbol] = {
+      symbol,
+      ltp: quote.ltp,
+      open: quote.open ?? 0,
+      high: quote.high > 0 ? quote.high : quote.ltp,
+      low: quote.low > 0 ? quote.low : quote.ltp,
+      close: prevClose,
+      volume: quote.volume ?? 0,
+      change,
+      changePercent,
+      timestamp: Date.now(),
+    };
+
     if (REALTIME_SYMBOLS.has(symbol)) {
-      const prevClose = quote.close > 0 ? quote.close : quote.ltp;
-      const change = quote.ltp - prevClose;
-      const tick: PriceTick = {
-        token: meta.token,
-        symbol,
-        ltp: quote.ltp,
-        open: quote.open ?? 0,
-        high: quote.high ?? 0,
-        low: quote.low ?? 0,
-        close: prevClose,
-        volume: quote.volume ?? 0,
-        change,
-        changePercent: prevClose > 0 ? (change / prevClose) * 100 : 0,
-        timestamp: Date.now(),
-      };
+      const tick: PriceTick = { token: meta.token, ...batchPrices[symbol]! };
       smartStream.emit("tick", tick);
     }
 
     synced++;
   }
+
+  if (Object.keys(batchPrices).length > 0) {
+    smartStream.emit("batchPrices", batchPrices);
+  }
+
   return synced;
 }
 
