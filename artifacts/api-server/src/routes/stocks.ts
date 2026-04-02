@@ -33,7 +33,7 @@ router.get("/stocks", async (req, res) => {
     const whereClause = search ? or(ilike(stocksTable.symbol, `%${search}%`), ilike(stocksTable.name, `%${search}%`)) : undefined;
 
     const [stocks, [{ total }]] = await Promise.all([
-      db.select().from(stocksTable).where(whereClause).orderBy(desc(stocksTable.marketCap)).limit(limit).offset(offset),
+      db.select().from(stocksTable).where(whereClause).orderBy(desc(stocksTable.currentPrice), desc(stocksTable.marketCap)).limit(limit).offset(offset),
       db.select({ total: sql<number>`count(*)::int` }).from(stocksTable).where(whereClause),
     ]);
 
