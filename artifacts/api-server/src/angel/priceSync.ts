@@ -185,9 +185,54 @@ async function syncIndices() {
   }
 }
 
-export function startIndicesSync(intervalMs = 3000) {
+export function startIndicesSync(intervalMs = 1000) {
   syncIndices().catch(console.error);
   return setInterval(() => {
     syncIndices().catch(console.error);
+  }, intervalMs);
+}
+
+// Dedicated fast REST sync for top popular stocks (watchlist/portfolio staples)
+const REALTIME_ENTRIES = ALL_ENTRIES.filter(([sym]) => REALTIME_SYMBOLS.has(sym));
+let realtimeSyncing = false;
+
+async function syncRealtimeSymbols() {
+  if (realtimeSyncing) return;
+  realtimeSyncing = true;
+  try {
+    const tokens = REALTIME_ENTRIES.map(([, v]) => v.token);
+    let quotes: Record<string, { ltp: number; open: number; high: number; low: number; close: number; volume: number }>;
+    try {
+      quotes = await getMarketQuotes(tokens);
+    } catch {
+      return;
+    }
+    const batchPrices: Record<string, Omit<PriceTick, "token">> = {};
+    for (const [symbol, meta] of REALTIME_ENTRIES) {
+      const quote = quotes[meta.angelSymbol] ?? quotes[symbol] ?? quotes[symbol + "-EQ"];
+      if (!quote?.ltp || quote.ltp === 0) continue;
+      const prevClose = quote.close > 0 ? quote.close : quote.ltp;
+      const change = quote.ltp - prevClose;
+      const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+      batchPrices[symbol] = {
+        symbol, ltp: quote.ltp, open: quote.open ?? 0,
+        high: quote.high > 0 ? quote.high : quote.ltp,
+        low: quote.low > 0 ? quote.low : quote.ltp,
+        close: prevClose, volume: quote.volume ?? 0,
+        change, changePercent, timestamp: Date.now(),
+      };
+    }
+    if (Object.keys(batchPrices).length > 0) {
+      smartStream.emit("batchPrices", batchPrices);
+    }
+  } finally {
+    realtimeSyncing = false;
+  }
+}
+
+export function startRealtimeSync(intervalMs = 3000) {
+  syncRealtimeSymbols().catch(console.error);
+  return setInterval(() => {
+    syncRealtimeSymbols().catch(console.error);
   }, intervalMs);
 }
