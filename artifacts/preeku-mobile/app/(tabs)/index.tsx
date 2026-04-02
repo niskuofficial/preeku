@@ -59,7 +59,7 @@ function WatchlistRow({ symbol, name, colors, onPress }: {
       activeOpacity={0.7}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
-        <StockLogo symbol={symbol} size={38} borderRadius={10} logoUrl={(item as any).logoUrl} />
+        <StockLogo symbol={symbol} size={38} borderRadius={10} />
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" }}>{symbol}</Text>
           <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 }} numberOfLines={1}>{name}</Text>
@@ -307,24 +307,46 @@ export default function HomeScreen() {
   const liveStats = useMemo(() => {
     const totalInvested = s?.totalInvested ?? 0;
     const walletBalance = s?.walletBalance ?? 1000000;
-    let liveCurrentValue = 0, liveDayPnl = 0, hasLivePrices = false;
+    let liveCurrentValue = 0, liveDayPnl = 0, liveSymbols = 0, totalSymbols = 0;
     for (const pos of positionList) {
+      totalSymbols++;
       const ltp = prices[pos.symbol]?.ltp ?? 0;
-      if (ltp > 0) { liveCurrentValue += ltp * pos.quantity; liveDayPnl += (ltp - pos.avgBuyPrice) * pos.quantity; hasLivePrices = true; }
-      else liveCurrentValue += pos.investedValue;
+      if (ltp > 0) {
+        liveCurrentValue += ltp * pos.quantity;
+        liveDayPnl += (ltp - pos.avgBuyPrice) * pos.quantity;
+        liveSymbols++;
+      } else {
+        liveCurrentValue += pos.investedValue;
+      }
     }
     for (const h of holdingList) {
+      totalSymbols++;
       const tick = prices[h.symbol];
       const ltp = tick?.ltp ?? 0;
-      if (ltp > 0) { liveCurrentValue += ltp * h.quantity; const prevClose = tick.close > 0 ? tick.close : h.avgBuyPrice; liveDayPnl += (ltp - prevClose) * h.quantity; hasLivePrices = true; }
-      else liveCurrentValue += h.investedValue;
+      if (ltp > 0) {
+        liveCurrentValue += ltp * h.quantity;
+        const prevClose = tick!.close > 0 ? tick!.close : h.avgBuyPrice;
+        liveDayPnl += (ltp - prevClose) * h.quantity;
+        liveSymbols++;
+      } else {
+        liveCurrentValue += h.investedValue;
+      }
     }
     const hasPositions = positionList.length > 0 || holdingList.length > 0;
-    const currentValue = hasPositions ? liveCurrentValue : (s?.currentValue ?? 0);
-    const totalPnl = hasPositions ? currentValue - totalInvested : (s?.totalPnl ?? 0);
+    const hasLive = liveSymbols > 0;
+    // If no live prices yet, fall back to API-computed values so P&L shows correct from DB
+    if (!hasPositions || !hasLive) {
+      const cv = s?.currentValue ?? 0;
+      return {
+        currentValue: cv, totalPnl: s?.totalPnl ?? 0,
+        totalPnlPercent: s?.totalPnlPercent ?? 0, dayPnl: s?.dayPnl ?? 0,
+        totalInvested, walletBalance,
+      };
+    }
+    const currentValue = liveCurrentValue;
+    const totalPnl = currentValue - totalInvested;
     const totalPnlPercent = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
-    const dayPnl = hasPositions && hasLivePrices ? liveDayPnl : (s?.dayPnl ?? 0);
-    return { currentValue, totalPnl, totalPnlPercent, dayPnl, totalInvested, walletBalance };
+    return { currentValue, totalPnl, totalPnlPercent, dayPnl: liveDayPnl, totalInvested, walletBalance };
   }, [prices, positionList, holdingList, s]);
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
