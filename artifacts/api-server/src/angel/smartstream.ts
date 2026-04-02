@@ -19,6 +19,10 @@ export interface PriceTick {
 }
 
 const TOKEN_SYMBOL_MAP: Record<string, string> = {
+  // NSE Indices
+  "26000": "NIFTY50",
+  "26009": "BANKNIFTY",
+  // Large Cap Stocks
   "2885": "RELIANCE",
   "11536": "TCS",
   "1333": "HDFCBANK",
@@ -46,6 +50,16 @@ const TOKEN_SYMBOL_MAP: Record<string, string> = {
   "11630": "NTPC",
   "17818": "LTIM",
   "13538": "TECHM",
+  // Mid Cap additions
+  "3432": "TATACONSUM",
+  "10940": "DMART",
+  "7406": "APOLLOHOSP",
+  "8075": "JSWSTEEL",
+  "4306": "TATAPOWER",
+  "15414": "HDFCLIFE",
+  "4668": "ULTRACEMCO",
+  "11703": "GRASIM",
+  "3456": "TATAMOTORS",
 };
 
 const NSE_TOKENS = Object.keys(TOKEN_SYMBOL_MAP);

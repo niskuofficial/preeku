@@ -97,7 +97,7 @@ function RecentRow({ symbol, name, exchange, colors, onPress, onBuy, onSell }: {
       activeOpacity={0.7}
     >
       <View style={{ marginRight: 10 }}>
-        <StockLogo symbol={symbol} size={36} borderRadius={9} logoUrl={(item as any).logoUrl} />
+        <StockLogo symbol={symbol} size={36} borderRadius={9} />
       </View>
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -280,12 +280,12 @@ export default function HomeScreen() {
 
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
   const apiBase = domain ? `https://${domain}` : "http://localhost:8080";
-  const { data: indicesData } = useQuery<Array<{ name: string; value: number; change: number; changePercent: number }>>({
-    queryKey: ["market-indices"],
-    queryFn: () => fetch(`${apiBase}/api/market/indices`).then((r) => r.json()),
-    refetchInterval: 30000,
-    staleTime: 15000,
-  });
+  const niftyLive = prices["NIFTY50"];
+  const sensexLive = prices["SENSEX"];
+  const liveIndices = [
+    { name: "NIFTY 50", value: niftyLive?.ltp ?? 0, change: niftyLive?.change ?? 0, changePercent: niftyLive?.changePercent ?? 0 },
+    { name: "SENSEX", value: sensexLive?.ltp ?? 0, change: sensexLive?.change ?? 0, changePercent: sensexLive?.changePercent ?? 0 },
+  ];
 
   const [moversTab, setMoversTab] = useState<"gainers" | "losers">("gainers");
 
@@ -393,10 +393,7 @@ export default function HomeScreen() {
       >
         {/* Market Indices */}
         <View style={{ flexDirection: "row", marginHorizontal: 16, marginBottom: 12, gap: 10 }}>
-          {(indicesData && indicesData.length > 0 ? indicesData : [
-            { name: "NIFTY 50", value: 0, change: 0, changePercent: 0 },
-            { name: "SENSEX", value: 0, change: 0, changePercent: 0 },
-          ]).map((idx) => {
+          {liveIndices.map((idx) => {
             const up = idx.changePercent >= 0;
             const clr = idx.value === 0 ? colors.mutedForeground : up ? colors.gain : colors.loss;
             return (

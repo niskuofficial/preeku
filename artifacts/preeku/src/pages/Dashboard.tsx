@@ -1,5 +1,4 @@
 import { useGetPortfolioSummary, useGetMarketHeatmap, useListOrders, useGetWatchlist, useGetPositions, useGetHoldings } from "@workspace/api-client-react";
-import { useQuery } from "@tanstack/react-query";
 import { formatINR, formatPercent, pnlClass } from "@/lib/format";
 import { useTradingContext } from "@/context/TradingContext";
 import { useLivePrices, useLivePrice } from "@/context/LivePricesContext";
@@ -194,12 +193,8 @@ export default function Dashboard() {
   const { connected, prices } = useLivePrices();
   const [moversTab, setMoversTab] = useState<"gainers" | "losers">("gainers");
 
-  const { data: indicesData } = useQuery<IndexData[]>({
-    queryKey: ["market-indices"],
-    queryFn: () => fetch("/api/market/indices").then((r) => r.json()),
-    refetchInterval: 30000,
-    staleTime: 15000,
-  });
+  const niftyLive = prices["NIFTY50"];
+  const sensexLive = prices["SENSEX"];
 
   const s = summary as SummaryType | undefined;
   const recentOrders = Array.isArray(orders) ? orders.slice(0, 5) : [];
@@ -240,9 +235,21 @@ export default function Dashboard() {
   const topGainers = [...enriched].filter((s) => s.chgPct > 0).sort((a, b) => b.chgPct - a.chgPct).slice(0, 6);
   const topLosers = [...enriched].filter((s) => s.chgPct < 0).sort((a, b) => a.chgPct - b.chgPct).slice(0, 6);
 
-  const indices: IndexData[] = indicesData && indicesData.length > 0 ? indicesData : [
-    { name: "NIFTY 50", value: 0, change: 0, changePercent: 0 },
-    { name: "SENSEX", value: 0, change: 0, changePercent: 0 },
+  const indices: IndexData[] = [
+    {
+      name: "NIFTY 50",
+      value: niftyLive?.ltp ?? 0,
+      change: niftyLive?.change ?? 0,
+      changePercent: niftyLive?.changePercent ?? 0,
+      open: niftyLive?.open, high: niftyLive?.high, low: niftyLive?.low,
+    },
+    {
+      name: "SENSEX",
+      value: sensexLive?.ltp ?? 0,
+      change: sensexLive?.change ?? 0,
+      changePercent: sensexLive?.changePercent ?? 0,
+      open: sensexLive?.open, high: sensexLive?.high, low: sensexLive?.low,
+    },
   ];
 
   const baseValue = s ? (s.totalInvested || 1000000) : 1000000;

@@ -1,7 +1,7 @@
 import http from "http";
 import app from "./app";
 import { logger } from "./lib/logger";
-import { startPriceSync } from "./angel/priceSync";
+import { startPriceSync, startIndicesSync } from "./angel/priceSync";
 import { smartStream } from "./angel/smartstream";
 import { createPriceHub } from "./angel/priceHub";
 
@@ -25,8 +25,9 @@ server.listen(port, async () => {
   createPriceHub(server);
 
   if (process.env.ANGEL_API_KEY && process.env.ANGEL_CLIENT_ID) {
-    logger.info("Starting Angel One price sync (REST every 5s)...");
-    startPriceSync(5000);
+    logger.info("Starting Angel One price sync (REST every 3s, batch 50 + indices every 3s)...");
+    startPriceSync(3000);
+    startIndicesSync(3000);
 
     logger.info("Connecting to Angel One SmartStream WebSocket...");
     try {
