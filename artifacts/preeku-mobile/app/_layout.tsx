@@ -20,6 +20,8 @@ import { LivePricesProvider } from "@/context/LivePricesContext";
 import OrderModal from "@/components/OrderModal";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { WatchlistProvider } from "@/context/WatchlistContext";
+import { RecentSearchesProvider } from "@/context/RecentSearchesContext";
 import LoginScreen from "./login";
 
 if (process.env.EXPO_PUBLIC_DOMAIN) {
@@ -40,15 +42,19 @@ function RootLayoutNav() {
   }
 
   return (
-    <LivePricesProvider>
-      <TradingProvider>
-        <Stack screenOptions={{ headerBackTitle: "Back" }}>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="stock/[symbol]" options={{ headerShown: false }} />
-        </Stack>
-        <OrderModal />
-      </TradingProvider>
-    </LivePricesProvider>
+    <RecentSearchesProvider>
+      <WatchlistProvider>
+        <LivePricesProvider>
+          <TradingProvider>
+            <Stack screenOptions={{ headerBackTitle: "Back" }}>
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="stock/[symbol]" options={{ headerShown: false }} />
+            </Stack>
+            <OrderModal />
+          </TradingProvider>
+        </LivePricesProvider>
+      </WatchlistProvider>
+    </RecentSearchesProvider>
   );
 }
 

@@ -14,8 +14,8 @@ import { useColors } from "@/hooks/useColors";
 import { useTradingContext } from "@/context/TradingContext";
 import { FlashingPrice } from "@/components/FlashingPrice";
 import { useLivePrice, useLivePrices } from "@/context/LivePricesContext";
-import { useMobileWatchlist } from "@/hooks/useMobileWatchlist";
-import { useMobileRecentSearches } from "@/hooks/useMobileRecentSearches";
+import { useWatchlist } from "@/context/WatchlistContext";
+import { useRecentSearches } from "@/context/RecentSearchesContext";
 import StockLogo from "@/components/StockLogo";
 
 function formatINR(n: number) {
@@ -260,8 +260,8 @@ export default function HomeScreen() {
   const { data: holdings } = useGetHoldings();
   const { prices } = useLivePrices();
 
-  const { items: watchlistItems } = useMobileWatchlist();
-  const { recents, removeRecent, clearAll: clearRecents } = useMobileRecentSearches();
+  const { items: watchlistItems } = useWatchlist();
+  const { recents, removeRecent, clearAll: clearRecents } = useRecentSearches();
 
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [profileName, setProfileName] = useState("Trader");

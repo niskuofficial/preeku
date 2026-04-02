@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   Platform, StatusBar, ActivityIndicator, Dimensions,
@@ -7,12 +7,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Svg, { Path, Defs, LinearGradient, Stop, Line, Circle } from "react-native-svg";
+import * as Haptics from "expo-haptics";
 import { useGetStock } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useTradingContext } from "@/context/TradingContext";
 import { FlashingPrice, FlashingChange } from "@/components/FlashingPrice";
 import { useLivePrice } from "@/context/LivePricesContext";
 import StockLogo from "@/components/StockLogo";
+import { useRecentSearches } from "@/context/RecentSearchesContext";
+import { useWatchlist } from "@/context/WatchlistContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CHART_WIDTH = SCREEN_WIDTH - 32;
@@ -145,6 +148,8 @@ export default function StockDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { openOrderModal } = useTradingContext();
+  const { addRecent } = useRecentSearches();
+  const { addItem: addToWatchlist, removeItem: removeFromWatchlist, has: inWatchlist } = useWatchlist();
 
   const { data: stock, isLoading, refetch } = useGetStock(symbol ?? "", {
     query: { refetchInterval: 30000, enabled: !!symbol },
@@ -171,6 +176,25 @@ export default function StockDetailScreen() {
   const lossColor = colors.loss;
   const priceColor = isUp ? gainColor : lossColor;
   const topInset = Platform.OS === "web" ? 0 : insets.top;
+  const watched = inWatchlist(symbol ?? "");
+
+  // Auto-add to recent searches when stock data loads
+  useEffect(() => {
+    if (s?.symbol) {
+      addRecent({ symbol: s.symbol, name: s.name, sector: s.sector, exchange: s.exchange });
+    }
+  }, [s?.symbol]);
+
+  const handleWatchlistToggle = useCallback(() => {
+    if (!s) return;
+    Haptics.selectionAsync();
+    if (watched) {
+      removeFromWatchlist(s.symbol);
+    } else {
+      addToWatchlist({ symbol: s.symbol, name: s.name, sector: s.sector, exchange: s.exchange });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  }, [s, watched]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -202,6 +226,13 @@ export default function StockDetailScreen() {
           <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 1 }} numberOfLines={1}>{s?.name ?? ""}</Text>
         </View>
 
+        <TouchableOpacity
+          onPress={handleWatchlistToggle}
+          style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: watched ? colors.primary + "22" : colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: watched ? colors.primary + "66" : colors.border }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name={watched ? "bookmark" : "bookmark-outline"} size={20} color={watched ? colors.primary : colors.mutedForeground} />
+        </TouchableOpacity>
         <TouchableOpacity
           onPress={() => refetch()}
           style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border }}

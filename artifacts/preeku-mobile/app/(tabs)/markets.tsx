@@ -12,9 +12,9 @@ import { useColors } from "@/hooks/useColors";
 import { FlashingPrice } from "@/components/FlashingPrice";
 import { useLivePrices, useLivePrice } from "@/context/LivePricesContext";
 import { useMarketStatus } from "@/hooks/useMarketStatus";
-import { useMobileWatchlist } from "@/hooks/useMobileWatchlist";
+import { useWatchlist } from "@/context/WatchlistContext";
 import StockLogo from "@/components/StockLogo";
-import { useMobileRecentSearches } from "@/hooks/useMobileRecentSearches";
+import { useRecentSearches } from "@/context/RecentSearchesContext";
 
 const INITIAL_SIZE = 20;
 const LOAD_MORE_SIZE = 10;
@@ -94,8 +94,8 @@ export default function MarketsScreen() {
   const router = useRouter();
   const { connected, prices } = useLivePrices();
   const { isOpen: marketOpen, label: marketLabel } = useMarketStatus();
-  const { addItem: addToWatchlist, removeItem: removeFromWatchlist, has: inWatchlist } = useMobileWatchlist();
-  const { addRecent } = useMobileRecentSearches();
+  const { addItem: addToWatchlist, removeItem: removeFromWatchlist, has: inWatchlist } = useWatchlist();
+  const { addRecent } = useRecentSearches();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
