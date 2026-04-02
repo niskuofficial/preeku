@@ -1,8 +1,8 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { formatINR, formatPercent, pnlClass } from "@/lib/format";
 import { useTradingContext } from "@/context/TradingContext";
-import { useLivePrices } from "@/context/LivePricesContext";
+import { useLivePrices, useLivePrice } from "@/context/LivePricesContext";
 import { useMarketStatus } from "@/hooks/useMarketStatus";
 import { useAddToWatchlist, useGetWatchlist, getGetWatchlistQueryKey } from "@workspace/api-client-react";
 import { useRecentSearches } from "@/hooks/useRecentSearches";
@@ -18,6 +18,96 @@ interface Stock {
   symbol: string; name: string; exchange: string; sector: string;
   currentPrice: number; previousClose: number; change: number; changePercent: number;
   high: number; low: number; volume: number; marketCap: number;
+}
+
+function FlashCell({ value, format, className }: { value: number; format?: (v: number) => string; className?: string }) {
+  const prevRef = useRef<number | undefined>(undefined);
+  const [flash, setFlash] = useState("");
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (prevRef.current === undefined) { prevRef.current = value; return; }
+    if (value !== prevRef.current) {
+      const up = value > prevRef.current;
+      prevRef.current = value;
+      if (timer.current) clearTimeout(timer.current);
+      setFlash(up ? "flash-green" : "flash-red");
+      timer.current = setTimeout(() => setFlash(""), 800);
+    }
+  }, [value]);
+  return <span className={`inline-block px-1 rounded ${flash} ${className ?? ""}`}>{format ? format(value) : formatINR(value)}</span>;
+}
+
+interface MarketRowProps {
+  stock: Stock;
+  inWatchlist: boolean;
+  isPending: boolean;
+  onBuy: () => void;
+  onSell: () => void;
+  onWatchlist: () => void;
+  onRowClick: () => void;
+}
+function MarketRow({ stock, inWatchlist, isPending, onBuy, onSell, onWatchlist, onRowClick }: MarketRowProps) {
+  const live = useLivePrice(stock.symbol);
+  const ltp = live?.ltp ?? stock.currentPrice;
+  const chg = live?.change ?? stock.change;
+  const chgPct = live?.changePercent ?? stock.changePercent;
+  const volume = live?.volume ?? stock.volume;
+
+  return (
+    <tr
+      className="border-b border-border/50 hover:bg-accent/30 transition-colors cursor-pointer"
+      data-testid={`market-row-${stock.symbol}`}
+      onClick={onRowClick}
+    >
+      <td className="py-3 px-4">
+        <div className="flex items-center gap-2.5">
+          <StockLogo symbol={stock.symbol} logoUrl={(stock as any).logoUrl} size={32} />
+          <div>
+            <div className="font-semibold text-foreground">{stock.symbol}</div>
+            <div className="text-muted-foreground text-xs">{stock.sector}</div>
+          </div>
+        </div>
+      </td>
+      <td className="py-3 px-4 text-muted-foreground max-w-[180px] truncate text-sm">{stock.name}</td>
+      <td className="py-3 px-4 text-right">
+        <span className="text-xs bg-secondary text-muted-foreground px-2 py-0.5 rounded">{stock.exchange}</span>
+      </td>
+      <td className="py-3 px-4 text-right font-mono font-semibold">
+        {ltp > 0 ? <FlashCell value={ltp} /> : <span className="text-muted-foreground text-xs">—</span>}
+      </td>
+      <td className={`py-3 px-4 text-right font-mono text-sm ${chg !== 0 ? pnlClass(chg) : "text-muted-foreground"}`}>
+        {chg !== 0 ? (
+          <span className="flex items-center justify-end gap-1">
+            {chg >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+            <FlashCell value={chg} format={(v) => `${v >= 0 ? "+" : ""}${formatINR(Math.abs(v))}`} className={pnlClass(chg)} />
+          </span>
+        ) : "—"}
+      </td>
+      <td className={`py-3 px-4 text-right font-mono text-sm`}>
+        {chgPct !== 0
+          ? <FlashCell value={chgPct} format={(v) => formatPercent(v)} className={pnlClass(chgPct)} />
+          : <span className="text-muted-foreground">—</span>}
+      </td>
+      <td className="py-3 px-4 text-right font-mono text-muted-foreground text-xs">
+        {volume > 0 ? volume.toLocaleString("en-IN") : "—"}
+      </td>
+      <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
+        <div className="flex gap-1.5 justify-center items-center">
+          <button onClick={onBuy} data-testid={`btn-buy-${stock.symbol}`} className="px-3 py-1 text-xs font-semibold bg-green-500/15 text-green-400 border border-green-500/30 rounded hover:bg-green-500/25 transition-colors">BUY</button>
+          <button onClick={onSell} data-testid={`btn-sell-${stock.symbol}`} className="px-3 py-1 text-xs font-semibold bg-red-500/15 text-red-400 border border-red-500/30 rounded hover:bg-red-500/25 transition-colors">SELL</button>
+          <button
+            onClick={onWatchlist}
+            disabled={inWatchlist || isPending}
+            data-testid={`btn-watchlist-${stock.symbol}`}
+            title={inWatchlist ? "Already in watchlist" : "Add to Watchlist"}
+            className={`p-1.5 rounded transition-colors ${inWatchlist ? "text-primary cursor-default" : "text-muted-foreground hover:text-primary hover:bg-primary/10"}`}
+          >
+            {inWatchlist ? <BookmarkCheck className="w-4 h-4" /> : isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bookmark className="w-4 h-4" />}
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
 }
 
 async function fetchStocks(search: string, offset: number, limit: number): Promise<Stock[]> {
@@ -189,85 +279,18 @@ export default function Markets() {
             </tr>
           </thead>
           <tbody>
-            {filteredList.map((stock) => {
-              const live = prices[stock.symbol];
-              const ltp = live?.ltp ?? stock.currentPrice;
-              const chg = live?.change ?? stock.change;
-              const chgPct = live?.changePercent ?? stock.changePercent;
-              const inWatchlist = watchlistSymbols.has(stock.symbol);
-              const isPending = pendingWatchlist.has(stock.symbol);
-              return (
-                <tr
-                  key={stock.symbol}
-                  className="border-b border-border/50 hover:bg-accent/30 transition-colors"
-                  data-testid={`market-row-${stock.symbol}`}
-                  onClick={() => addRecent({ symbol: stock.symbol, name: stock.name, sector: stock.sector, exchange: stock.exchange, viewedAt: Date.now() })}
-                >
-                  <td className="py-3 px-4">
-                    <div className="flex items-center gap-2.5">
-                      <StockLogo symbol={stock.symbol} logoUrl={stock.logoUrl} size={32} />
-                      <div>
-                        <div className="font-semibold text-foreground">{stock.symbol}</div>
-                        <div className="text-muted-foreground text-xs">{stock.sector}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-3 px-4 text-muted-foreground max-w-[180px] truncate text-sm">{stock.name}</td>
-                  <td className="py-3 px-4 text-right">
-                    <span className="text-xs bg-secondary text-muted-foreground px-2 py-0.5 rounded">{stock.exchange}</span>
-                  </td>
-                  <td className="py-3 px-4 text-right font-mono font-semibold text-foreground">
-                    {ltp > 0 ? formatINR(ltp) : <span className="text-muted-foreground text-xs">—</span>}
-                  </td>
-                  <td className={`py-3 px-4 text-right font-mono text-sm ${chg !== 0 ? pnlClass(chg) : "text-muted-foreground"}`}>
-                    {chg !== 0 ? (
-                      <span className="flex items-center justify-end gap-1">
-                        {chg >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                        {chg >= 0 ? "+" : ""}{formatINR(Math.abs(chg))}
-                      </span>
-                    ) : "—"}
-                  </td>
-                  <td className={`py-3 px-4 text-right font-mono text-sm ${chgPct !== 0 ? pnlClass(chgPct) : "text-muted-foreground"}`}>
-                    {chgPct !== 0 ? formatPercent(chgPct) : "—"}
-                  </td>
-                  <td className="py-3 px-4 text-right font-mono text-muted-foreground text-xs">
-                    {(live?.volume ?? stock.volume) > 0 ? (live?.volume ?? stock.volume).toLocaleString("en-IN") : "—"}
-                  </td>
-                  <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex gap-1.5 justify-center items-center">
-                      <button
-                        onClick={() => trackAndOpen(stock, "BUY")}
-                        data-testid={`btn-buy-${stock.symbol}`}
-                        className="px-3 py-1 text-xs font-semibold bg-green-500/15 text-green-400 border border-green-500/30 rounded hover:bg-green-500/25 transition-colors"
-                      >BUY</button>
-                      <button
-                        onClick={() => trackAndOpen(stock, "SELL")}
-                        data-testid={`btn-sell-${stock.symbol}`}
-                        className="px-3 py-1 text-xs font-semibold bg-red-500/15 text-red-400 border border-red-500/30 rounded hover:bg-red-500/25 transition-colors"
-                      >SELL</button>
-                      <button
-                        onClick={() => handleAddToWatchlist(stock)}
-                        disabled={inWatchlist || isPending}
-                        data-testid={`btn-watchlist-${stock.symbol}`}
-                        title={inWatchlist ? "Already in watchlist" : "Add to Watchlist"}
-                        className={`p-1.5 rounded transition-colors ${
-                          inWatchlist
-                            ? "text-primary cursor-default"
-                            : "text-muted-foreground hover:text-primary hover:bg-primary/10"
-                        }`}
-                      >
-                        {inWatchlist
-                          ? <BookmarkCheck className="w-4 h-4" />
-                          : isPending
-                          ? <Loader2 className="w-4 h-4 animate-spin" />
-                          : <Bookmark className="w-4 h-4" />
-                        }
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+            {filteredList.map((stock) => (
+              <MarketRow
+                key={stock.symbol}
+                stock={stock}
+                inWatchlist={watchlistSymbols.has(stock.symbol)}
+                isPending={pendingWatchlist.has(stock.symbol)}
+                onBuy={() => trackAndOpen(stock, "BUY")}
+                onSell={() => trackAndOpen(stock, "SELL")}
+                onWatchlist={() => handleAddToWatchlist(stock)}
+                onRowClick={() => addRecent({ symbol: stock.symbol, name: stock.name, sector: stock.sector, exchange: stock.exchange, viewedAt: Date.now() })}
+              />
+            ))}
 
             {!isLoading && filteredList.length === 0 && stockList.length > 0 && (
               <tr>

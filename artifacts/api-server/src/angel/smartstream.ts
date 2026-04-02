@@ -56,6 +56,7 @@ export class SmartStream extends EventEmitter {
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private isRunning = false;
   private latestPrices: Map<string, PriceTick> = new Map();
+  private tickCount = 0;
 
   async start() {
     this.isRunning = true;
@@ -195,9 +196,12 @@ export class SmartStream extends EventEmitter {
 
       this.latestPrices.set(symbol, tick);
       this.emit("tick", tick);
+      this.tickCount++;
 
-      if (this.tickCount <= 5) {
-        console.log(`[SmartStream] tick: ${symbol} ltp=${ltp}`);
+      if (this.tickCount <= 10) {
+        console.log(`[SmartStream] tick #${this.tickCount}: ${symbol} ltp=${ltp}`);
+      } else if (this.tickCount % 100 === 0) {
+        console.log(`[SmartStream] ${this.tickCount} total ticks received`);
       }
     } catch (e) {
       if (this.tickCount <= 3) console.error("[SmartStream] parse error:", e);

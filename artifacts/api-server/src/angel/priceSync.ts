@@ -19,7 +19,17 @@ let syncing = false;
 
 async function syncBatch(entries: [string, { token: string; angelSymbol: string }][]): Promise<number> {
   const nseTokens = entries.map(([, v]) => v.token);
-  const quotes = await getMarketQuotes(nseTokens);
+  let quotes: Record<string, { ltp: number; open: number; high: number; low: number; close: number; volume: number }>;
+  try {
+    quotes = await getMarketQuotes(nseTokens);
+  } catch (err) {
+    console.error(`[PriceSync] getMarketQuotes error:`, err);
+    return 0;
+  }
+  const quotedCount = Object.keys(quotes).length;
+  if (quotedCount === 0) {
+    console.warn(`[PriceSync] No quotes returned for batch of ${entries.length} tokens (batchIndex=${batchIndex})`);
+  }
   let synced = 0;
 
   const batchPrices: Record<string, Omit<PriceTick, "token">> = {};
@@ -67,6 +77,9 @@ async function syncBatch(entries: [string, { token: string; angelSymbol: string 
 
   if (Object.keys(batchPrices).length > 0) {
     smartStream.emit("batchPrices", batchPrices);
+    console.log(`[PriceSync] Batch done: ${synced}/${entries.length} stocks, broadcast ${Object.keys(batchPrices).length} prices via WS`);
+  } else {
+    console.warn(`[PriceSync] Batch done: 0 prices to broadcast. Quotes returned: ${quotedCount}, entries: ${entries.length}`);
   }
 
   return synced;
