@@ -19,6 +19,11 @@ export interface PriceTick {
   timestamp: number;
 }
 
+// BSE index tokens (exchangeType 3) — kept separate to avoid NSE collisions
+const BSE_TOKEN_SYMBOL_MAP: Record<string, string> = {
+  "1": "SENSEX",
+};
+
 const TOKEN_SYMBOL_MAP: Record<string, string> = {
   // NSE Indices
   "26000": "NIFTY50",
@@ -148,17 +153,21 @@ export class SmartStream extends EventEmitter {
 
   private subscribe() {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    const tokens = Object.keys(TOKEN_SYMBOL_MAP);
+    const nseTokens = Object.keys(TOKEN_SYMBOL_MAP);
+    const bseTokens = Object.keys(BSE_TOKEN_SYMBOL_MAP);
     const payload = {
       correlationID: "preeku_ltp",
       action: 1,
       params: {
         mode: 2,
-        tokenList: [{ exchangeType: 1, tokens }],
+        tokenList: [
+          { exchangeType: 1, tokens: nseTokens },
+          { exchangeType: 3, tokens: bseTokens },
+        ],
       },
     };
     this.ws.send(JSON.stringify(payload));
-    console.log(`[SmartStream] Subscribed to ${tokens.length} tokens (Quote mode)`);
+    console.log(`[SmartStream] Subscribed to ${nseTokens.length} NSE + ${bseTokens.length} BSE tokens (Quote mode)`);
   }
 
   // Add portfolio/watchlist stocks to SmartStream for real-time ticks
@@ -188,9 +197,13 @@ export class SmartStream extends EventEmitter {
   private parseBinary(buf: Buffer) {
     try {
       const mode = buf.readUInt8(0);
+      const exchangeType = buf.readUInt8(1);
 
       const tokenRaw = buf.subarray(2, 27).toString("utf8").replace(/\0/g, "").trim();
-      const symbol = TOKEN_SYMBOL_MAP[tokenRaw];
+      // Look up in the right map based on exchange type (1=NSE, 3=BSE)
+      const symbol = exchangeType === 3
+        ? BSE_TOKEN_SYMBOL_MAP[tokenRaw]
+        : TOKEN_SYMBOL_MAP[tokenRaw];
 
       if (!symbol) return;
 
