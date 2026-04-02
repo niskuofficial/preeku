@@ -30,6 +30,10 @@ args = "Start Backend"
 task = "workflow.run"
 args = "Start application"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start Mobile"
+
 [[workflows.workflow]]
 name = "Start Backend"
 author = "agent"
@@ -53,6 +57,18 @@ waitForPort = 25135
 
 [workflows.workflow.metadata]
 outputType = "webview"
+
+[[workflows.workflow]]
+name = "Start Mobile"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PORT=22590 pnpm --filter @workspace/preeku-mobile run dev"
+waitForPort = 22590
 
 [agent]
 stack = "PNPM_WORKSPACE"
