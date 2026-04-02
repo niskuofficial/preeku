@@ -104,13 +104,30 @@ export function createPriceHub(server: Server) {
     });
   });
 
-  smartStream.on("tick", (tick: PriceTick) => {
-    // Update global store with SmartStream tick
-    const { token: _token, ...tickData } = tick;
-    if (tick.ltp > 0) {
-      globalPriceStore[tick.symbol] = tickData;
+  // Batch SmartStream ticks — flush every 100ms instead of per-tick broadcast
+  // With 2131 stocks, per-tick broadcast would flood the WebSocket
+  let tickBuffer: Record<string, Omit<PriceTick, "token">> = {};
+  let flushScheduled = false;
+
+  function scheduledFlush() {
+    flushScheduled = false;
+    if (Object.keys(tickBuffer).length === 0) return;
+    const batch = tickBuffer;
+    tickBuffer = {};
+    if (clients.size > 0) {
+      broadcast({ type: "snapshot", data: batch });
     }
-    broadcast({ type: "tick", data: tick });
+  }
+
+  smartStream.on("tick", (tick: PriceTick) => {
+    const { token: _token, ...tickData } = tick;
+    if (tick.ltp <= 0) return;
+    globalPriceStore[tick.symbol] = tickData;
+    tickBuffer[tick.symbol] = tickData;
+    if (!flushScheduled) {
+      flushScheduled = true;
+      setTimeout(scheduledFlush, 100);
+    }
   });
 
   smartStream.on("batchPrices", (prices: Record<string, Omit<PriceTick, "token">>) => {

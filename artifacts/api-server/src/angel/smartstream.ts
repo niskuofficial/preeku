@@ -4,6 +4,7 @@ import { getSession } from "./client";
 import { FULL_SYMBOL_TOKEN_MAP } from "./symbolTokenMap";
 
 const SMARTSTREAM_URL = "wss://smartapisocket.angelone.in/smart-stream";
+const BATCH_SIZE = 500; // tokens per subscription message
 
 export interface PriceTick {
   token: string;
@@ -19,55 +20,27 @@ export interface PriceTick {
   timestamp: number;
 }
 
-// BSE index tokens (exchangeType 3) — kept separate to avoid NSE collisions
+// Build full NSE reverse map: token → symbol (2131 stocks + indices)
+const NSE_TOKEN_SYMBOL_MAP: Record<string, string> = {
+  "26000": "NIFTY50",
+  "26009": "BANKNIFTY",
+};
+for (const [symbol, entry] of Object.entries(FULL_SYMBOL_TOKEN_MAP)) {
+  NSE_TOKEN_SYMBOL_MAP[entry.token] = symbol;
+}
+
+// BSE index tokens (exchangeType 3)
 const BSE_TOKEN_SYMBOL_MAP: Record<string, string> = {
   "1": "SENSEX",
 };
 
-const TOKEN_SYMBOL_MAP: Record<string, string> = {
-  // NSE Indices
-  "26000": "NIFTY50",
-  "26009": "BANKNIFTY",
-  // Large Cap Stocks
-  "2885": "RELIANCE",
-  "11536": "TCS",
-  "1333": "HDFCBANK",
-  "1594": "INFY",
-  "1394": "HINDUNILVR",
-  "4963": "ICICIBANK",
-  "1922": "KOTAKBANK",
-  "317": "BAJFINANCE",
-  "3045": "SBIN",
-  "10604": "BHARTIARTL",
-  "1660": "ITC",
-  "3787": "WIPRO",
-  "7229": "HCLTECH",
-  "10999": "MARUTI",
-  "3351": "SUNPHARMA",
-  "3506": "TITAN",
-  "25": "ADANIENT",
-  "16675": "BAJAJFINSV",
-  "17963": "NESTLEIND",
-  "236": "ASIANPAINT",
-  "3499": "TATASTEEL",
-  "2475": "ONGC",
-  "20374": "COALINDIA",
-  "14977": "POWERGRID",
-  "11630": "NTPC",
-  "17818": "LTIM",
-  "13538": "TECHM",
-  // Mid Cap additions
-  "3432": "TATACONSUM",
-  "10940": "DMART",
-  "7406": "APOLLOHOSP",
-  "8075": "JSWSTEEL",
-  "4306": "TATAPOWER",
-  "15414": "HDFCLIFE",
-  "4668": "ULTRACEMCO",
-  "11703": "GRASIM",
-  "3456": "TATAMOTORS",
-};
-
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+}
 
 export class SmartStream extends EventEmitter {
   private ws: WebSocket | null = null;
@@ -109,7 +82,7 @@ export class SmartStream extends EventEmitter {
 
       ws.on("open", () => {
         console.log("[SmartStream] Connected to Angel One");
-        this.subscribe();
+        this.subscribeAll();
         this.startHeartbeat();
       });
 
@@ -151,38 +124,55 @@ export class SmartStream extends EventEmitter {
     }
   }
 
-  private subscribe() {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    const nseTokens = Object.keys(TOKEN_SYMBOL_MAP);
+  // Subscribe ALL 2131 NSE stocks + SENSEX in batches of 500
+  private subscribeAll() {
+    const allNseTokens = Object.keys(NSE_TOKEN_SYMBOL_MAP);
+    const batches = chunkArray(allNseTokens, BATCH_SIZE);
     const bseTokens = Object.keys(BSE_TOKEN_SYMBOL_MAP);
-    const payload = {
-      correlationID: "preeku_ltp",
-      action: 1,
-      params: {
-        mode: 2,
-        tokenList: [
-          { exchangeType: 1, tokens: nseTokens },
-          { exchangeType: 3, tokens: bseTokens },
-        ],
-      },
-    };
-    this.ws.send(JSON.stringify(payload));
-    console.log(`[SmartStream] Subscribed to ${nseTokens.length} NSE + ${bseTokens.length} BSE tokens (Quote mode)`);
+
+    console.log(`[SmartStream] Subscribing ${allNseTokens.length} NSE + ${bseTokens.length} BSE tokens in ${batches.length} batches...`);
+
+    batches.forEach((batch, i) => {
+      setTimeout(() => {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+        const tokenList: { exchangeType: number; tokens: string[] }[] = [
+          { exchangeType: 1, tokens: batch },
+        ];
+        // Attach BSE tokens to the first batch
+        if (i === 0 && bseTokens.length > 0) {
+          tokenList.push({ exchangeType: 3, tokens: bseTokens });
+        }
+        const payload = {
+          correlationID: `preeku_batch_${i}`,
+          action: 1,
+          params: { mode: 2, tokenList },
+        };
+        this.ws!.send(JSON.stringify(payload));
+        if (i === batches.length - 1) {
+          console.log(`[SmartStream] All ${allNseTokens.length} NSE + ${bseTokens.length} BSE tokens subscribed (${batches.length} batches)`);
+        }
+      }, i * 250); // 250ms between batches to avoid flood
+    });
   }
 
-  // Add portfolio/watchlist stocks to SmartStream for real-time ticks
+  // Keep for backward compat — most stocks already subscribed via subscribeAll
   addPortfolioTokens(symbols: string[]) {
-    let added = 0;
+    const newTokens: string[] = [];
     for (const symbol of symbols) {
       const entry = FULL_SYMBOL_TOKEN_MAP[symbol];
-      if (entry && !TOKEN_SYMBOL_MAP[entry.token]) {
-        TOKEN_SYMBOL_MAP[entry.token] = symbol;
-        added++;
+      if (entry && !NSE_TOKEN_SYMBOL_MAP[entry.token]) {
+        NSE_TOKEN_SYMBOL_MAP[entry.token] = symbol;
+        newTokens.push(entry.token);
       }
     }
-    if (added > 0) {
-      console.log(`[SmartStream] Added ${added} portfolio tokens, re-subscribing (total: ${Object.keys(TOKEN_SYMBOL_MAP).length})`);
-      this.subscribe();
+    if (newTokens.length > 0 && this.ws?.readyState === WebSocket.OPEN) {
+      const payload = {
+        correlationID: "preeku_portfolio",
+        action: 1,
+        params: { mode: 2, tokenList: [{ exchangeType: 1, tokens: newTokens }] },
+      };
+      this.ws.send(JSON.stringify(payload));
+      console.log(`[SmartStream] Added ${newTokens.length} extra portfolio tokens`);
     }
   }
 
@@ -200,16 +190,15 @@ export class SmartStream extends EventEmitter {
       const exchangeType = buf.readUInt8(1);
 
       const tokenRaw = buf.subarray(2, 27).toString("utf8").replace(/\0/g, "").trim();
-      // Look up in the right map based on exchange type (1=NSE, 3=BSE)
       const symbol = exchangeType === 3
         ? BSE_TOKEN_SYMBOL_MAP[tokenRaw]
-        : TOKEN_SYMBOL_MAP[tokenRaw];
+        : NSE_TOKEN_SYMBOL_MAP[tokenRaw];
 
       if (!symbol) return;
 
       const ltp = Number(buf.readBigInt64LE(43)) / 100;
 
-      if (ltp <= 0 || ltp > 1000000) return;
+      if (ltp <= 0 || ltp > 10000000) return;
 
       let open = 0, high = 0, low = 0, close = 0, volume = 0;
       if (mode === 2 && buf.length >= 123) {
@@ -244,7 +233,7 @@ export class SmartStream extends EventEmitter {
 
       if (this.tickCount <= 10) {
         console.log(`[SmartStream] tick #${this.tickCount}: ${symbol} ltp=${ltp}`);
-      } else if (this.tickCount % 100 === 0) {
+      } else if (this.tickCount % 500 === 0) {
         console.log(`[SmartStream] ${this.tickCount} total ticks received`);
       }
     } catch (e) {
