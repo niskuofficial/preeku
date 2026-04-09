@@ -30,7 +30,7 @@ const DEFAULT_HEADERS = {
   "X-UserType": "USER",
   "X-SourceID": "WEB",
   "X-ClientLocalIP": "127.0.0.1",
-  "X-ClientPublicIP": "35.197.48.114",
+  "X-ClientPublicIP": process.env.SERVER_PUBLIC_IP || "127.0.0.1",
   "X-MACAddress": "00:00:00:00:00:00",
   "X-PrivateKey": API_KEY,
 };
