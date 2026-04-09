@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
-import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { ClerkProvider, SignIn, SignUp, useAuth, useClerk } from "@clerk/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { TradingProvider } from "@/context/TradingContext";
 import { LivePricesProvider } from "@/context/LivePricesContext";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
 import Sidebar from "@/components/Sidebar";
 import OrderWindow from "@/components/OrderWindow";
 import Dashboard from "@/pages/Dashboard";
@@ -15,6 +15,8 @@ import Orders from "@/pages/Orders";
 import Portfolio from "@/pages/Portfolio";
 import Admin from "@/pages/Admin";
 import Landing from "@/pages/Landing";
+import SignIn from "@/pages/SignIn";
+import SignUp from "@/pages/SignUp";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -23,72 +25,36 @@ const queryClient = new QueryClient({
   },
 });
 
-const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-function stripBase(path: string): string {
-  return basePath && path.startsWith(basePath) ? path.slice(basePath.length) || "/" : path;
-}
-
-function useClerkWithTimeout(timeoutMs = 5000) {
-  const { isLoaded, isSignedIn } = useAuth();
-  const [timedOut, setTimedOut] = useState(false);
-
+function FetchInterceptor() {
+  const { token } = useAuth();
   useEffect(() => {
-    if (isLoaded) return;
-    const timer = setTimeout(() => setTimedOut(true), timeoutMs);
-    return () => clearTimeout(timer);
-  }, [isLoaded, timeoutMs]);
-
-  return { isLoaded: isLoaded || timedOut, isSignedIn: isLoaded ? isSignedIn : false };
-}
-
-function SignInPage() {
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
-    </div>
-  );
-}
-
-function SignUpPage() {
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
-    </div>
-  );
-}
-
-function ClerkQueryClientCacheInvalidator() {
-  const { addListener } = useClerk();
-  const qc = useQueryClient();
-  const prevUserIdRef = useRef<string | null | undefined>(undefined);
-
-  useEffect(() => {
-    const unsubscribe = addListener(({ user }) => {
-      const userId = user?.id ?? null;
-      if (prevUserIdRef.current !== undefined && prevUserIdRef.current !== userId) {
-        qc.clear();
+    const origFetch = window.fetch.bind(window);
+    window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
+      if (url.startsWith("/api") || url.includes("/api/")) {
+        const t = localStorage.getItem("preeku_token");
+        if (t) {
+          init = { ...init, headers: { Authorization: `Bearer ${t}`, ...init.headers } };
+        }
       }
-      prevUserIdRef.current = userId;
-    });
-    return unsubscribe;
-  }, [addListener, qc]);
-
+      return origFetch(input, init);
+    };
+    return () => { window.fetch = origFetch; };
+  }, [token]);
   return null;
 }
 
 function HomeRedirect() {
-  const { isLoaded, isSignedIn } = useClerkWithTimeout();
-
+  const { isLoaded, isSignedIn } = useAuth();
   if (!isLoaded) return null;
   if (isSignedIn) return <Redirect to="/dashboard" />;
   return <Landing />;
 }
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
-  const { isLoaded, isSignedIn } = useClerkWithTimeout();
+  const { isLoaded, isSignedIn } = useAuth();
 
   if (!isLoaded) {
     return (
@@ -98,7 +64,7 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
     );
   }
 
-  if (!isSignedIn) return <Redirect to="/" />;
+  if (!isSignedIn) return <Redirect to="/sign-in" />;
 
   return (
     <AppLayout>
@@ -123,50 +89,35 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ClerkProviderWithRoutes() {
-  const [, setLocation] = useLocation();
-
+function AppRoutes() {
   return (
-    <ClerkProvider
-      publishableKey={clerkPubKey!}
-      proxyUrl={clerkProxyUrl}
-      routerPush={(to) => setLocation(stripBase(to))}
-      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
-    >
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <ClerkQueryClientCacheInvalidator />
-          <Switch>
-            <Route path="/" component={HomeRedirect} />
-            <Route path="/sign-in/*?" component={SignInPage} />
-            <Route path="/sign-up/*?" component={SignUpPage} />
-            <Route path="/dashboard" component={() => <ProtectedRoute component={Dashboard} />} />
-            <Route path="/markets" component={() => <ProtectedRoute component={Markets} />} />
-            <Route path="/watchlist" component={() => <ProtectedRoute component={Watchlist} />} />
-            <Route path="/orders" component={() => <ProtectedRoute component={Orders} />} />
-            <Route path="/portfolio" component={() => <ProtectedRoute component={Portfolio} />} />
-            <Route path="/admin" component={() => <ProtectedRoute component={Admin} />} />
-            <Route component={NotFound} />
-          </Switch>
-          <Toaster />
-        </TooltipProvider>
-      </QueryClientProvider>
-    </ClerkProvider>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <FetchInterceptor />
+        <Switch>
+          <Route path="/" component={HomeRedirect} />
+          <Route path="/sign-in" component={SignIn} />
+          <Route path="/sign-up" component={SignUp} />
+          <Route path="/dashboard" component={() => <ProtectedRoute component={Dashboard} />} />
+          <Route path="/markets" component={() => <ProtectedRoute component={Markets} />} />
+          <Route path="/watchlist" component={() => <ProtectedRoute component={Watchlist} />} />
+          <Route path="/orders" component={() => <ProtectedRoute component={Orders} />} />
+          <Route path="/portfolio" component={() => <ProtectedRoute component={Portfolio} />} />
+          <Route path="/admin" component={() => <ProtectedRoute component={Admin} />} />
+          <Route component={NotFound} />
+        </Switch>
+        <Toaster />
+      </TooltipProvider>
+    </QueryClientProvider>
   );
 }
 
 function App() {
-  if (!clerkPubKey) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center text-muted-foreground">
-        Clerk key not configured. Set VITE_CLERK_PUBLISHABLE_KEY.
-      </div>
-    );
-  }
-
   return (
     <WouterRouter base={basePath}>
-      <ClerkProviderWithRoutes />
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
     </WouterRouter>
   );
 }

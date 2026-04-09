@@ -7,6 +7,7 @@ export const usersTable = pgTable("users", {
   clerkId: text("clerk_id").notNull().unique(),
   email: text("email").notNull(),
   name: text("name").notNull().default(""),
+  passwordHash: text("password_hash"),
   profilePhoto: text("profile_photo"),
   isAdmin: boolean("is_admin").notNull().default(false),
   isBlocked: boolean("is_blocked").notNull().default(false),

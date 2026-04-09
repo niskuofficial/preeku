@@ -1,8 +1,9 @@
-import { getAuth } from "@clerk/express";
+import jwt from "jsonwebtoken";
 import type { Request, Response, NextFunction } from "express";
 import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db/schema";
-import { eq, count } from "drizzle-orm";
+import { eq } from "drizzle-orm";
+import { JWT_SECRET } from "../routes/auth";
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const deviceId = req.headers["x-device-id"] as string | undefined;
@@ -22,42 +23,43 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const auth = getAuth(req);
-  const userId = auth?.userId;
-  if (!userId) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Unauthorized" });
   }
-  (req as any).userId = userId;
 
+  const token = authHeader.slice(7);
   try {
-    const existing = await db.select().from(usersTable).where(eq(usersTable.clerkId, userId)).limit(1);
-    if (existing.length === 0) {
-      const email = (auth as any)?.sessionClaims?.email ?? "";
-      const name = (auth as any)?.sessionClaims?.name ?? (auth as any)?.sessionClaims?.firstName ?? "";
-      const [adminCount] = await db.select({ count: count() }).from(usersTable).where(eq(usersTable.isAdmin, true));
-      const isFirstAdmin = adminCount.count === 0;
-      await db.insert(usersTable).values({ clerkId: userId, email, name, isAdmin: isFirstAdmin });
-    } else if (existing[0].isBlocked) {
+    const payload = jwt.verify(token, JWT_SECRET) as { userId: string };
+    (req as any).userId = payload.userId;
+
+    const existing = await db.select().from(usersTable).where(eq(usersTable.clerkId, payload.userId)).limit(1);
+    if (existing.length > 0 && existing[0].isBlocked) {
       return res.status(403).json({ error: "Account is blocked. Contact support." });
     }
-  } catch (_) {}
-
-  next();
+    next();
+  } catch {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
 }
 
 export async function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  const auth = getAuth(req);
-  const userId = auth?.userId;
-  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
 
+  const token = authHeader.slice(7);
   try {
-    const user = await db.select().from(usersTable).where(eq(usersTable.clerkId, userId)).limit(1);
-    if (!user.length || !user[0].isAdmin) {
+    const payload = jwt.verify(token, JWT_SECRET) as { userId: string };
+
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.clerkId, payload.userId)).limit(1);
+    if (!user || !user.isAdmin) {
       return res.status(403).json({ error: "Admin access required" });
     }
-    (req as any).userId = userId;
+    (req as any).userId = payload.userId;
     next();
-  } catch (_) {
-    res.status(500).json({ error: "Internal server error" });
+  } catch {
+    return res.status(401).json({ error: "Unauthorized" });
   }
 }

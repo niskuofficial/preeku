@@ -1,8 +1,8 @@
 import { Link, useLocation } from "wouter";
 import { LayoutDashboard, TrendingUp, BookMarked, ClipboardList, BarChart3, Shield, LogOut, Sun, Moon } from "lucide-react";
-import { useClerk, useUser } from "@clerk/react";
 import { useState } from "react";
 import { useTheme } from "../hooks/useTheme";
+import { useAuth } from "@/context/AuthContext";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -14,25 +14,20 @@ const navItems = [
 
 export default function Sidebar() {
   const [location] = useLocation();
-  const { signOut } = useClerk();
-  const { user } = useUser();
+  const { user, signOut } = useAuth();
   const { isDark, toggleTheme } = useTheme();
 
-  const initials = (user?.firstName || user?.emailAddresses?.[0]?.emailAddress || "U")[0].toUpperCase();
-  const displayName = user?.firstName
-    ? `${user.firstName}${user.lastName ? " " + user.lastName : ""}`
-    : user?.emailAddresses?.[0]?.emailAddress ?? "User";
-  const email = user?.emailAddresses?.[0]?.emailAddress;
+  const displayName = user?.name || user?.email || "User";
+  const email = user?.email;
+  const initials = (displayName)[0].toUpperCase();
 
   return (
     <aside className="flex flex-col w-16 lg:w-56 h-full bg-sidebar border-r border-sidebar-border shrink-0">
-      {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
         <img src="/logo.png" alt="Preeku" className="w-8 h-8 rounded-md object-contain shrink-0" />
         <span className="hidden lg:block font-bold text-foreground text-lg tracking-tight">Preeku</span>
       </div>
 
-      {/* Nav */}
       <nav className="flex-1 py-4 space-y-1 px-2">
         {navItems.map(({ href, icon: Icon, label }) => {
           const isActive = location === href || location.startsWith(href);
@@ -56,9 +51,7 @@ export default function Sidebar() {
         <AdminLink location={location} />
       </nav>
 
-      {/* Account Section */}
       <div className="px-3 py-4 border-t border-sidebar-border space-y-2">
-        {/* Paper Trading badge */}
         <div className="hidden lg:flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
           <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
           <span className="text-amber-500 dark:text-amber-400 text-xs font-medium">Paper Trading</span>
@@ -67,7 +60,6 @@ export default function Sidebar() {
           <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
         </div>
 
-        {/* User info */}
         <div className="flex items-center gap-2.5 px-2 py-1.5">
           <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
             {initials}
@@ -78,7 +70,6 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* Theme toggle */}
         <button
           onClick={toggleTheme}
           title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
@@ -98,9 +89,8 @@ export default function Sidebar() {
           </div>
         </button>
 
-        {/* Sign Out */}
         <button
-          onClick={() => signOut()}
+          onClick={signOut}
           className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-red-500 hover:bg-red-500/10 transition-colors"
           title="Sign Out"
         >

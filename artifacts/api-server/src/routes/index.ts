@@ -9,9 +9,11 @@ import angelRouter from "./angel";
 import adminRouter from "./admin";
 import userRouter from "./user";
 import mobileRouter from "./mobile";
+import authRouter from "./auth";
 
 const router: IRouter = Router();
 
+router.use(authRouter);
 router.use(healthRouter);
 router.use(walletRouter);
 router.use(stocksRouter);

@@ -3,6 +3,7 @@ import { db, usersTable, walletTable, ordersTable, positionsTable, stocksTable }
 import { eq, desc, count, ilike, or, sql } from "drizzle-orm";
 import { requireAdmin, requireAuth } from "../middlewares/requireAuth";
 import { getOrCreateWallet } from "./wallet";
+import bcrypt from "bcryptjs";
 
 const router: IRouter = Router();
 
@@ -95,26 +96,15 @@ router.patch("/admin/users/:clerkId/password", requireAdmin, async (req, res) =>
   try {
     const { clerkId } = req.params;
     const { password } = req.body;
-    if (!password || typeof password !== "string" || password.length < 8) {
-      return res.status(400).json({ error: "Password must be at least 8 characters." });
+    if (!password || typeof password !== "string" || password.length < 6) {
+      return res.status(400).json({ error: "Password must be at least 6 characters." });
     }
-    const clerkSecret = process.env.CLERK_SECRET_KEY;
-    if (!clerkSecret) return res.status(500).json({ error: "Clerk not configured." });
-
-    const clerkRes = await fetch(`https://api.clerk.com/v1/users/${clerkId}`, {
-      method: "PATCH",
-      headers: {
-        "Authorization": `Bearer ${clerkSecret}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ password, skip_password_checks: true }),
-    });
-
-    if (!clerkRes.ok) {
-      const err = await clerkRes.json();
-      return res.status(400).json({ error: err?.errors?.[0]?.message || "Failed to update password." });
-    }
-
+    const passwordHash = await bcrypt.hash(password, 10);
+    const [updated] = await db.update(usersTable)
+      .set({ passwordHash, updatedAt: new Date() })
+      .where(eq(usersTable.clerkId, clerkId))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "User not found" });
     req.log.info({ clerkId }, "Admin: Password changed for user");
     res.json({ success: true, message: "Password updated successfully." });
   } catch (err) {
