@@ -18,7 +18,8 @@ let session: AngelSession | null = null;
 let loginPromise: Promise<AngelSession> | null = null;
 
 function generateTOTP(): string {
-  const secret = OTPAuth.Secret.fromBase32(TOTP_SECRET.toUpperCase().trim());
+  const cleaned = TOTP_SECRET.toUpperCase().trim().replace(/0/g, "O").replace(/1/g, "I");
+  const secret = OTPAuth.Secret.fromBase32(cleaned);
   const totp = new OTPAuth.TOTP({ secret, algorithm: "SHA1", digits: 6, period: 30 });
   return totp.generate();
 }
