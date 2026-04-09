@@ -177,6 +177,48 @@ router.patch("/admin/stocks/:symbol/logo", requireAdmin, async (req, res) => {
   }
 });
 
+// Seed stocks from Angel One ScripMaster (public CDN, no auth needed)
+router.post("/admin/seed-stocks", requireAdmin, async (req, res) => {
+  try {
+    req.log.info("Admin: Starting stocks seed from Angel One ScripMaster...");
+    const response = await fetch("https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json");
+    if (!response.ok) throw new Error(`ScripMaster fetch failed: ${response.status}`);
+    const scrips: Array<{ token: string; symbol: string; name: string; exch_seg: string; instrumenttype: string; lotsize: string }> = await response.json();
+
+    const nseEquity = scrips.filter(s => s.exch_seg === "NSE" && s.instrumenttype === "EQ");
+    req.log.info(`Admin: Found ${nseEquity.length} NSE equity stocks in ScripMaster`);
+
+    let inserted = 0;
+    const CHUNK = 100;
+    for (let i = 0; i < nseEquity.length; i += CHUNK) {
+      const chunk = nseEquity.slice(i, i + CHUNK);
+      const values = chunk.map(s => ({
+        symbol: s.symbol.replace(/-EQ$/, ""),
+        name: s.name || s.symbol,
+        exchange: "NSE" as const,
+        sector: "Equities",
+        currentPrice: "0.00",
+        previousClose: "0.00",
+        high: "0.00",
+        low: "0.00",
+        volume: 0,
+        marketCap: "0.00",
+        updatedAt: new Date(),
+      }));
+      await db.insert(stocksTable).values(values).onConflictDoUpdate({
+        target: stocksTable.symbol,
+        set: { name: sql`excluded.name`, exchange: sql`excluded.exchange`, updatedAt: sql`excluded.updated_at` },
+      });
+      inserted += chunk.length;
+    }
+    req.log.info(`Admin: Seeded ${inserted} stocks`);
+    res.json({ success: true, inserted });
+  } catch (err) {
+    req.log.error({ err }, "Admin: seed-stocks error");
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 // Bootstrap: first signed-in user can claim admin if NO admins exist yet
 router.post("/admin/bootstrap", requireAuth, async (req, res) => {
   const userId = (req as any).userId;
