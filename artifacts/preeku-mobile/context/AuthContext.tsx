@@ -43,9 +43,8 @@ async function getOrCreateDeviceId(): Promise<string> {
 
 async function registerWithServer(deviceId: string, name: string, email: string) {
   try {
-    const domain = process.env.EXPO_PUBLIC_DOMAIN;
-    const baseUrl = domain ? `https://${domain}` : "http://localhost:8080";
-    await fetch(`${baseUrl}/api/mobile/register`, {
+    const { API_BASE } = await import("@/constants/api");
+    await fetch(`${API_BASE}/api/mobile/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ deviceId, name, email }),

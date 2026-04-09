@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { API_BASE } from "@/constants/api";
 import {
   View, Text, FlatList, TextInput,
   TouchableOpacity, Platform, RefreshControl, ActivityIndicator,
@@ -81,11 +82,9 @@ function StockRow({ item, onPress, onWatchlist, inWatchlist, colors }: {
 }
 
 function buildApiUrl(search: string, offset: number, limit: number) {
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  const base = domain ? `https://${domain}` : "http://localhost:8080";
   const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
   if (search.trim()) params.set("search", search.trim());
-  return `${base}/api/stocks?${params}`;
+  return `${API_BASE}/api/stocks?${params}`;
 }
 
 export default function MarketsScreen() {

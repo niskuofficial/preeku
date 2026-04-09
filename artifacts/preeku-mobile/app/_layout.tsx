@@ -24,9 +24,8 @@ import { WatchlistProvider } from "@/context/WatchlistContext";
 import { RecentSearchesProvider } from "@/context/RecentSearchesContext";
 import LoginScreen from "./login";
 
-if (process.env.EXPO_PUBLIC_DOMAIN) {
-  setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
-}
+import { API_BASE } from "@/constants/api";
+setBaseUrl(API_BASE);
 
 SplashScreen.preventAutoHideAsync();
 

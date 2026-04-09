@@ -17,6 +17,7 @@ import {
 import { useColors } from "@/hooks/useColors";
 import { useAppTheme } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
+import { API_BASE } from "@/constants/api";
 
 function formatINR(n: number) {
   if (Math.abs(n) >= 1e7) return "₹" + (n / 1e7).toFixed(2) + " Cr";
@@ -25,8 +26,7 @@ function formatINR(n: number) {
 }
 
 function getApiBase() {
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  return domain ? `https://${domain}` : "http://localhost:8080";
+  return API_BASE;
 }
 
 interface Summary {

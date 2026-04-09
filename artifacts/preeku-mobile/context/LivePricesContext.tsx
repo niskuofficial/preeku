@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
+import { WS_BASE } from "@/constants/api";
 
 export interface LivePrice {
   symbol: string;
@@ -34,10 +35,7 @@ export function useLivePrice(symbol: string | undefined) {
   return symbol ? prices[symbol] : undefined;
 }
 
-const WS_DOMAIN = process.env.EXPO_PUBLIC_DOMAIN ?? "";
-const WS_URL = WS_DOMAIN
-  ? `wss://${WS_DOMAIN}/ws/prices`
-  : null;
+const WS_URL = `${WS_BASE}/ws/prices`;
 
 export function LivePricesProvider({ children }: { children: React.ReactNode }) {
   const [prices, setPrices] = useState<Record<string, LivePrice>>({});

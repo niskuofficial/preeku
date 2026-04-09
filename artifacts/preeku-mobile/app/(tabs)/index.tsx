@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
+import { API_BASE } from "@/constants/api";
 import { useQuery } from "@tanstack/react-query";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
@@ -202,12 +203,9 @@ function MoverRow({
 }) {
   const router = useRouter();
   const live = useLivePrice(symbol);
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  const apiBase = domain ? `https://${domain}` : "http://localhost:8080";
-
   const { data: stockData } = useQuery<{ currentPrice: number; changePercent: number }>({
     queryKey: ["stock-detail", symbol],
-    queryFn: () => fetch(`${apiBase}/api/stocks/${symbol}`).then((r) => r.json()),
+    queryFn: () => fetch(`${API_BASE}/api/stocks/${symbol}`).then((r) => r.json()),
     enabled: !live || live.ltp === 0,
     staleTime: 30000,
     refetchInterval: 60000,
@@ -278,8 +276,6 @@ export default function HomeScreen() {
     return unsub;
   }, [navigation, reloadProfile]);
 
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  const apiBase = domain ? `https://${domain}` : "http://localhost:8080";
   const niftyLive = prices["NIFTY50"];
   const sensexLive = prices["SENSEX"];
   const liveIndices = [
