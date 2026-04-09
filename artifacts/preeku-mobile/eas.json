@@ -10,7 +10,8 @@
       "distribution": "internal",
       "node": "20.18.0",
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "image": "ubuntu-22.04-jdk-17-ndk-r27"
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://preeku.niskutech.com"
@@ -20,7 +21,8 @@
       "distribution": "internal",
       "node": "20.18.0",
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "image": "ubuntu-22.04-jdk-17-ndk-r27"
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://preeku.niskutech.com"
@@ -29,7 +31,8 @@
     "production": {
       "node": "20.18.0",
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "app-bundle",
+        "image": "ubuntu-22.04-jdk-17-ndk-r27"
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://preeku.niskutech.com"
