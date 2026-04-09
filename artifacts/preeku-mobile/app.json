@@ -1,11 +1,12 @@
 {
   "expo": {
     "name": "Preeku",
-    "slug": "preeku-mobile",
+    "slug": "preeku",
+    "owner": "preekutrading",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "preeku-mobile",
+    "scheme": "preeku",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
@@ -39,7 +40,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": ""
+        "projectId": "82c547c8-474e-48aa-9c75-7e9f4356f1b3"
       }
     }
   }
